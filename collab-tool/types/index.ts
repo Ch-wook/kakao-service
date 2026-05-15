@@ -1,0 +1,89 @@
+export interface Room {
+  id: string
+  title: string
+  created_at: string
+}
+
+export interface Participant {
+  id: string
+  room_id: string
+  nickname: string
+  last_active: string
+}
+
+export interface Widget {
+  id: string
+  room_id: string
+  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll'
+  data: Record<string, unknown>
+  order: number
+  created_at?: string
+}
+
+// Widget별 데이터 타입
+export interface ChecklistItem {
+  id: string
+  title: string
+  completed: boolean
+  assignee?: string
+  created_at?: string
+}
+
+export interface ChecklistData {
+  items: ChecklistItem[]
+}
+
+export interface ExpenseItem {
+  id: string
+  description: string
+  amount: number
+  payer: string
+  date: string
+  category?: string
+}
+
+export interface ExpenseData {
+  items: ExpenseItem[]
+  total: number
+}
+
+export interface VoteOption {
+  id: string
+  text: string
+  votes: string[] // 투표자 ID 배열
+}
+
+export interface VoteData {
+  question: string
+  options: VoteOption[]
+  created_at?: string
+}
+
+export interface ScheduleItem {
+  id: string
+  title: string
+  date: string
+  time?: string
+  participants: string[]
+  location?: string
+}
+
+export interface ScheduleData {
+  items: ScheduleItem[]
+}
+
+export interface RoleItem {
+  id: string
+  title: string
+  assignee: string
+  description?: string
+}
+
+export interface RoleData {
+  items: RoleItem[]
+}
+
+export interface MemoData {
+  content: string
+  updated_at?: string
+}
