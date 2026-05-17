@@ -1,6 +1,7 @@
 export interface Room {
   id: string
   title: string
+  share_code?: string
   created_at: string
 }
 
@@ -9,15 +10,19 @@ export interface Participant {
   room_id: string
   nickname: string
   last_active: string
+  created_at: string
+  color?: string
 }
 
 export interface Widget {
   id: string
   room_id: string
   type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll'
+  title?: string
   data: Record<string, unknown>
   order: number
   created_at?: string
+  updated_at?: string
 }
 
 // Widget별 데이터 타입
@@ -31,6 +36,7 @@ export interface ChecklistItem {
 
 export interface ChecklistData {
   items: ChecklistItem[]
+  [key: string]: unknown
 }
 
 export interface ExpenseItem {
