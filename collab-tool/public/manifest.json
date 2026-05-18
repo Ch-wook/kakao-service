@@ -1,0 +1,12 @@
+{
+  "name": "Collab",
+  "short_name": "Collab",
+  "description": "카카오톡 채팅방과 함께하는 가벼운 협업 도구",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#3B82F6",
+  "icons": [
+    { "src": "/next.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
