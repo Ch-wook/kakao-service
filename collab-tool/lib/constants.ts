@@ -22,7 +22,7 @@ export const WIDGET_TYPES = {
 export const WIDGET_LABELS: Record<string, string> = {
   checklist: '체크리스트',
   expense: '정산 (N빵)',
-  member: '인원 관리',
+  member: '멤버 관리',
   vote: '투표',
   memo: '공동 메모',
   schedule: '일정 조율',
@@ -33,7 +33,7 @@ export const WIDGET_LABELS: Record<string, string> = {
 export const WIDGET_DESCRIPTIONS: Record<string, string> = {
   checklist: '준비물, 할 일을 관리하세요',
   expense: '누가 얼마를 냈는지 추적하세요',
-  member: '순별 참석 현황을 실시간으로 관리하세요',
+  member: '그룹별 멤버와 참석 현황을 관리하세요',
   vote: '장소나 시간을 투표로 정하세요',
   memo: '자유롭게 메모를 작성하세요',
   schedule: '일정을 조율하고 공유하세요',

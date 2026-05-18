@@ -32,8 +32,8 @@ const WIDGET_OPTIONS: {
   },
   {
     type: 'member',
-    label: '인원 관리',
-    description: '순별 참석 현황을 실시간으로 관리하세요',
+    label: '멤버 관리',
+    description: '그룹별 멤버와 참석 현황을 관리하세요',
     emoji: '👥',
   },
 ]
