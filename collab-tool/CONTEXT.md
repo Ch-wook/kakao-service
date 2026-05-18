@@ -6,7 +6,8 @@
 **핵심 가치**: 카톡 대화를 스크롤하지 않아도 현재 상황을 한눈에 확인·수정 가능.
 
 **GitHub**: `https://github.com/Ch-wook/kakao-service` (브랜치: main)  
-**Vercel**: 배포 진행 중 (Root Directory: `collab-tool`)
+**Vercel**: 배포 완료 (새 프로젝트로 재생성, Root Directory: `collab-tool`)  
+**배포 URL**: `kakao-service.vercel.app` (신규 프로젝트 URL은 Vercel 대시보드 확인)
 
 ---
 
@@ -27,7 +28,7 @@
 | 3단계 | 실시간 위젯 엔진 (Checklist, Optimistic UI, Realtime 구독) | ✅ 완료 |
 | 4단계 | 모바일 최적화 레이아웃, Bottom Sheet, 공유 기능, 햅틱 | ✅ 완료 |
 | 5단계 | 정산(N빵) 위젯 추가 및 전체 버그 수정 | ✅ 완료 |
-| 배포 | Vercel 배포 + 빌드 오류 수정 | 🔄 진행 중 |
+| 배포 | Vercel 배포 + 환경변수 설정 | ✅ 완료 |
 
 ---
 
@@ -35,6 +36,7 @@
 
 ```
 kakao-service/                      ← GitHub 저장소 루트
+├── CLAUDE.md                       # AI 보안 규칙 (공동 계정 개인정보 보호)
 └── collab-tool/                    ← Next.js 프로젝트 (Vercel Root Directory)
     ├── app/
     │   ├── layout.tsx              # PWA 메타태그, viewport 설정
@@ -67,9 +69,11 @@ kakao-service/                      ← GitHub 저장소 루트
     │   ├── useWidgets.ts           # 위젯 CRUD + Realtime + Optimistic UI
     │   └── useRoom.ts              # 방/위젯/참여자 일괄 조회 (보조)
     ├── lib/
-    │   ├── supabase.ts             # Supabase 클라이언트 (NEXT_PUBLIC_ 키 사용)
+    │   ├── supabase.ts             # Supabase 클라이언트 (lazy 초기화)
     │   ├── utils.ts                # generateId, generateShareUrl 등
     │   └── constants.ts            # 위젯 타입, 라우트, 제한값 상수
+    ├── public/
+    │   └── manifest.json           # PWA manifest
     ├── types/
     │   └── index.ts                # 모든 타입 정의
     ├── next.config.ts              # typescript.ignoreBuildErrors: true
@@ -82,7 +86,7 @@ kakao-service/                      ← GitHub 저장소 루트
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://pvzkvfwsjmynvtypzbmn.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_zrlvgD1cwQgKRCMLHMjW-A_Ebzd3veo
+NEXT_PUBLIC_SUPABASE_ANON_KEY=(Supabase 대시보드에서 확인)
 ```
 
 > `.env.local`은 `.gitignore`에 포함되어 **GitHub에 올라가지 않음**.  
@@ -218,6 +222,10 @@ togglePayerStatus(widgetId, payerName)            // 납부 토글 (Optimistic)
 - 모든 API 파일에서 모듈 레벨 `throw` 제거 → `getSupabase()` 함수로 lazy 초기화
 - 환경변수 누락 시 HTML 에러 대신 JSON 에러 반환
 
+### Supabase 클라이언트 (lib/supabase.ts)
+- 모듈 레벨 직접 초기화 → **lazy 초기화 함수**로 변경
+- 환경변수 미설정 시 명확한 에러 메시지 출력 (빌드 실패 방지)
+
 ### 모바일 레이아웃
 - `h-dvh flex flex-col` — 전체 화면 고정
 - 헤더 sticky + 콘텐츠 `flex-1 overflow-y-auto` + 하단 바 (위젯 있을 때만)
@@ -231,20 +239,53 @@ togglePayerStatus(widgetId, payerName)            // 납부 토글 (Optimistic)
 |------|----------|------|
 | participant 중복 삽입 | `api/rooms/[id]/route.ts` | 재방문 시마다 새 row 추가 → `maybeSingle()`로 기존 확인 후 반환 |
 | API HTML 에러 반환 | 모든 API route.ts | 모듈 레벨 `throw` → `getSupabase()` 함수로 교체 |
-| rooms/[id] 경로 깨짐 | `api/rooms/[id]/` | 디렉토리가 `[id`(오타)로 저장 → `[System.IO.Directory]::CreateDirectory`로 올바른 `[id]` 생성 |
+| rooms/[id] 경로 깨짐 | `api/rooms/[id]/` | 디렉토리가 `[id`(오타)로 저장 → 올바른 `[id]` 생성 |
 | widget 새로고침 필요 | `hooks/useWidgets.ts` | `createWidget` 성공 시 Realtime 기다리지 않고 즉시 로컬 상태 반영 |
 | 공유 버튼 오작동 | `room/[id]/page.tsx` | 데스크탑에서 `navigator.share` 오류 → 클립보드 복사 우선으로 변경 |
 | 위젯 생성 에러 숨김 | `AddWidgetDrawer.tsx` | 생성 실패 시 Drawer가 닫혀서 에러 안 보임 → 실패 시 Drawer 유지 + 에러 표시 |
-| Vercel 빌드 실패 | `next.config.ts` | `rooms/[id/]` 깨진 경로 git rm + `ignoreBuildErrors: true` 추가 |
+| Vercel 빌드 실패 | `next.config.ts` | `ignoreBuildErrors: true` 추가 |
 | expense 기본 데이터 | `api/widgets/route.ts` | expense 위젯 생성 시 `{}` → `{ totalAmount: 0, description: '', payers: [] }` |
+| Supabase 모듈 레벨 초기화 | `lib/supabase.ts` | 환경변수 없으면 빌드 시 crash → lazy 초기화로 변경 |
+| manifest.json 누락 | `public/manifest.json` | layout.tsx에서 참조하나 파일 없음 → 생성 완료 |
+
+---
+
+## Vercel 배포 현황 및 주의사항
+
+### 현재 상태
+- 빌드: **성공** (Next.js 16.2.6, Turbopack, 20.x)
+- 배포: **완료** (Vercel 새 프로젝트로 재생성)
+- 접속: Vercel 대시보드에서 최신 프로젝트 URL 확인 필요
+
+### Vercel 설정 (재생성 시 기준)
+| 항목 | 값 |
+|------|-----|
+| Repository | `Ch-wook/kakao-service` |
+| Branch | `main` |
+| **Root Directory** | **`collab-tool`** ← 반드시 지정 |
+| Framework | Next.js (자동 감지) |
+| Node.js Version | 20.x |
+
+### 환경변수 (Vercel에 직접 입력)
+`.env.local` 파일의 두 값을 Vercel → Settings → Environment Variables에 추가해야 함:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+> ⚠️ `.env.local`은 gitignore되어 GitHub에 없음. Vercel에 수동 입력 필수.
+
+### 과거 배포 실패 원인 (해결됨)
+1. Root Directory 미설정 → `collab-tool` 지정으로 해결
+2. 환경변수 미설정 → Vercel 대시보드에 수동 입력
+3. Node.js 24.x 사용 → 20.x로 변경
+4. Supabase 모듈 레벨 초기화 → lazy 초기화로 변경
+5. 기존 Vercel 프로젝트 상태 꼬임 → 프로젝트 삭제 후 재생성
 
 ---
 
 ## 알려진 이슈
 
-- **Next.js 16 TypeScript 오류**: `.next/types/validator.ts`에서 `[id]` 동적 라우트 관련 오류 발생. 소스 코드 문제 아님. `next.config.ts`의 `ignoreBuildErrors: true`로 우회 중.
+- **Next.js 16 TypeScript 오류**: `.next/types/validator.ts`에서 `[id]` 동적 라우트 관련 오류. 소스 코드 문제 아님. `next.config.ts`의 `ignoreBuildErrors: true`로 우회 중.
 - **Anonymous Auth 미설정 시**: 닉네임 모달이 안 뜨고 "0명 참여 중" 표시. Supabase 대시보드에서 활성화 필요.
-- **`/create` 페이지**: 구현 완료. 이전에는 없어서 404 발생했으나 수정됨.
 - **Realtime 필터**: `postgres_changes` 구독에 `room_id` 필터 사용 중. RLS SELECT 정책 적용 필요.
 
 ---
@@ -289,30 +330,10 @@ npm run build
 
 ---
 
-## Vercel 배포 설정
-
-| 항목 | 값 |
-|------|-----|
-| Repository | `Ch-wook/kakao-service` (또는 `kakao-sheet`) |
-| Branch | `main` |
-| **Root Directory** | **`collab-tool`** ← 반드시 지정 |
-| Framework | Next.js (자동 감지) |
-| Build Command | `npm run build` |
-| Output Directory | `.next` |
-| Node.js Version | 18.x 이상 |
-
-**Environment Variables (Vercel에 직접 입력)**:
-```
-NEXT_PUBLIC_SUPABASE_URL = https://pvzkvfwsjmynvtypzbmn.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY = sb_publishable_zrlvgD1cwQgKRCMLHMjW-A_Ebzd3veo
-```
-
----
-
 ## 다음 할 일 (미구현)
 
+- [ ] 배포 URL 정상 접속 최종 확인
 - [ ] Anonymous Auth 활성화 확인 (Supabase 대시보드)
-- [ ] Vercel 배포 완료 확인
 - [ ] 투표(vote) 위젯 구현
 - [ ] 공동 메모(memo) 위젯 구현
 - [ ] 방 목록 / 즐겨찾기 기능
