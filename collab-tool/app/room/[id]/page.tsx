@@ -8,6 +8,7 @@ import { useWidgets } from '@/hooks/useWidgets'
 import SetNicknameModal from '@/components/Auth/SetNicknameModal'
 import ChecklistWidget from '@/components/Widgets/ChecklistWidget'
 import ExpenseWidget from '@/components/Widgets/ExpenseWidget'
+import MemberWidget from '@/components/Widgets/MemberWidget'
 import AddWidgetDrawer from '@/components/Widgets/AddWidgetDrawer'
 import { Share2, Users, Plus, ArrowLeft } from 'lucide-react'
 import { generateShareUrl } from '@/lib/utils'
@@ -43,6 +44,8 @@ export default function RoomPage() {
     deleteChecklistItem,
     updateExpenseData,
     togglePayerStatus,
+    updateMemberData,
+    toggleMemberStatus,
   } = useWidgets(roomId)
 
   // 방 정보 조회
@@ -329,6 +332,17 @@ export default function RoomPage() {
                     participants={participants.map((p) => p.nickname)}
                     onUpdateData={updateExpenseData}
                     onTogglePayer={togglePayerStatus}
+                    onDeleteWidget={deleteWidget}
+                  />
+                )
+              }
+              if (widget.type === 'member') {
+                return (
+                  <MemberWidget
+                    key={widget.id}
+                    widget={widget}
+                    onUpdateData={updateMemberData}
+                    onToggleStatus={toggleMemberStatus}
                     onDeleteWidget={deleteWidget}
                   />
                 )

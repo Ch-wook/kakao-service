@@ -17,7 +17,7 @@ export interface Participant {
 export interface Widget {
   id: string
   room_id: string
-  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll'
+  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll' | 'member'
   title?: string
   data: Record<string, unknown>
   order: number
@@ -89,4 +89,24 @@ export interface RoleData {
 export interface MemoData {
   content: string
   updated_at?: string
+}
+
+export type MemberStatus = 'unknown' | 'attending' | 'arrived' | 'preparing' | 'absent' | 'home'
+
+export interface Member {
+  id: string
+  name: string
+  status: MemberStatus
+  note?: string
+}
+
+export interface MemberGroup {
+  id: string
+  name: string
+  targetCount?: number
+  members: Member[]
+}
+
+export interface MemberData {
+  groups: MemberGroup[]
 }

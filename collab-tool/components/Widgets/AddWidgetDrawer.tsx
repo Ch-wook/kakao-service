@@ -30,6 +30,12 @@ const WIDGET_OPTIONS: {
     description: '총 금액 입력 후 1인당 금액을 자동 계산해요',
     emoji: '💰',
   },
+  {
+    type: 'member',
+    label: '인원 관리',
+    description: '순별 참석 현황을 실시간으로 관리하세요',
+    emoji: '👥',
+  },
 ]
 
 export default function AddWidgetDrawer({ isOpen, onClose, onAdd, error }: AddWidgetDrawerProps) {

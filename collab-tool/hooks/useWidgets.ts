@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { generateId, getCurrentTimestamp } from '@/lib/utils'
-import type { Widget, ChecklistItem, ChecklistData, ExpenseData } from '@/types'
+import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus } from '@/types'
 
 const asChecklist = (data: Record<string, unknown>): ChecklistData =>
   data as unknown as ChecklistData
@@ -15,6 +15,12 @@ const asExpense = (data: Record<string, unknown>): ExpenseData =>
   data as unknown as ExpenseData
 
 const fromExpense = (data: ExpenseData): Record<string, unknown> =>
+  data as unknown as Record<string, unknown>
+
+const asMember = (data: Record<string, unknown>): MemberData =>
+  data as unknown as MemberData
+
+const fromMember = (data: MemberData): Record<string, unknown> =>
   data as unknown as Record<string, unknown>
 
 export const useWidgets = (roomId: string) => {
@@ -124,6 +130,7 @@ export const useWidgets = (roomId: string) => {
         const defaultDataMap: Record<string, Record<string, unknown>> = {
           checklist: { items: [] },
           expense: { totalAmount: 0, description: '', payers: [] },
+          member: { groups: [{ id: generateId(), name: '참석 현황', targetCount: 0, members: [] }] },
         }
         const defaultData = defaultDataMap[type] ?? {}
 
@@ -458,6 +465,96 @@ export const useWidgets = (roomId: string) => {
     [widgets]
   )
 
+  // ─────────────────────────────────────────────
+  // 인원 관리: 전체 데이터 업데이트
+  // ─────────────────────────────────────────────
+  const updateMemberData = useCallback(
+    async (widgetId: string, newData: MemberData): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'member') return false
+
+      const currentData = asMember(widget.data)
+
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) => (w.id === widgetId ? { ...w, data: fromMember(newData) } : w))
+      )
+
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: newData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+
+        if (err) throw err
+        return true
+      } catch (err) {
+        console.error('Error updating member data:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? { ...w, data: fromMember(currentData) } : w))
+        )
+        setError('인원 데이터 업데이트 중 오류가 발생했습니다')
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [widgets]
+  )
+
+  // ─────────────────────────────────────────────
+  // 인원 관리: 상태 토글 (낙관적 업데이트)
+  // ─────────────────────────────────────────────
+  const toggleMemberStatus = useCallback(
+    async (widgetId: string, groupId: string, memberId: string): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'member') return false
+
+      const currentData = asMember(widget.data)
+      const statusCycle: MemberStatus[] = ['unknown', 'attending', 'arrived', 'preparing', 'absent', 'home']
+
+      const updatedGroups = currentData.groups.map((group) => {
+        if (group.id !== groupId) return group
+        return {
+          ...group,
+          members: group.members.map((member) => {
+            if (member.id !== memberId) return member
+            const idx = statusCycle.indexOf(member.status ?? 'unknown')
+            const nextStatus = statusCycle[(idx + 1) % statusCycle.length]
+            return { ...member, status: nextStatus }
+          }),
+        }
+      })
+
+      const updatedData: MemberData = { groups: updatedGroups }
+
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) => (w.id === widgetId ? { ...w, data: fromMember(updatedData) } : w))
+      )
+
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: updatedData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+
+        if (err) throw err
+        return true
+      } catch (err) {
+        console.error('Error toggling member status:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? { ...w, data: fromMember(currentData) } : w))
+        )
+        setError('상태 변경 중 오류가 발생했습니다')
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [widgets]
+  )
+
   return {
     widgets,
     isLoading,
@@ -471,5 +568,7 @@ export const useWidgets = (roomId: string) => {
     deleteChecklistItem,
     updateExpenseData,
     togglePayerStatus,
+    updateMemberData,
+    toggleMemberStatus,
   }
 }
