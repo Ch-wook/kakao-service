@@ -237,7 +237,7 @@ export default function MemberWidget({
                 if (e.key === 'Enter') handleAddGroup()
                 if (e.key === 'Escape') { setAddingGroup(false); setNewGroupName('') }
               }}
-              placeholder="그룹명 입력 (예: 1순 현장)"
+              placeholder="그룹명 입력 (1순 현장)"
               autoFocus
               className="flex-1 text-sm px-3 py-2 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50"
             />
