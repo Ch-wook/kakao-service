@@ -1,10 +1,10 @@
-import { createClient } from '@supabase/supabase-js'
+﻿import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !key) throw new Error('Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인하세요.')
+  if (!url || !key) throw new Error('Supabase 환경변수가 설정되지 않았습니다.')
   return createClient(url, key)
 }
 
@@ -33,7 +33,8 @@ export async function GET(
     return NextResponse.json(data)
   } catch (error) {
     console.error('Error fetching room:', error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : '방 조회 중 오류가 발생했습니다' }, { status: 500 })
+    const msg = (error as { message?: string })?.message ?? '방 조회 중 오류가 발생했습니다'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
 
@@ -91,6 +92,7 @@ export async function POST(
     return NextResponse.json(participant, { status: 201 })
   } catch (error) {
     console.error('Error adding participant:', error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : '참여자 추가 중 오류가 발생했습니다' }, { status: 500 })
+    const msg = (error as { message?: string })?.message ?? '참여자 추가 중 오류가 발생했습니다'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

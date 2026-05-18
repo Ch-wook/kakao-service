@@ -9,6 +9,7 @@ interface AddWidgetDrawerProps {
   isOpen: boolean
   onClose: () => void
   onAdd: (type: Widget['type'], title: string) => Promise<Widget | null>
+  error?: string | null
 }
 
 const WIDGET_OPTIONS: {
@@ -23,9 +24,15 @@ const WIDGET_OPTIONS: {
     description: '준비물, 할 일을 함께 체크하세요',
     emoji: '✅',
   },
+  {
+    type: 'expense',
+    label: '정산 (N빵)',
+    description: '총 금액 입력 후 1인당 금액을 자동 계산해요',
+    emoji: '💰',
+  },
 ]
 
-export default function AddWidgetDrawer({ isOpen, onClose, onAdd }: AddWidgetDrawerProps) {
+export default function AddWidgetDrawer({ isOpen, onClose, onAdd, error }: AddWidgetDrawerProps) {
   const [selectedType, setSelectedType] = useState<Widget['type']>('checklist')
   const [title, setTitle] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -39,9 +46,12 @@ export default function AddWidgetDrawer({ isOpen, onClose, onAdd }: AddWidgetDra
 
     setIsLoading(true)
     try {
-      await onAdd(selectedType, widgetTitle)
-      setTitle('')
-      onClose()
+      const result = await onAdd(selectedType, widgetTitle)
+      if (result) {
+        setTitle('')
+        onClose()
+      }
+      // result가 null이면 useWidgets의 error 상태가 설정됨 → 닫지 않고 유지
     } finally {
       setIsLoading(false)
     }
@@ -130,6 +140,13 @@ export default function AddWidgetDrawer({ isOpen, onClose, onAdd }: AddWidgetDra
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
+
+              {/* 에러 메시지 */}
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
+                  {error}
+                </div>
+              )}
 
               {/* 추가 버튼 */}
               <button

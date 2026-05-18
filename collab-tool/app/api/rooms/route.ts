@@ -1,20 +1,52 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !key) throw new Error('Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인하세요.')
+  return createClient(url, key)
 }
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey)
+/**
+ * POST /api/rooms - 새 방 생성
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = getSupabase()
+    const body = await request.json()
+    const { title } = body
+
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      return NextResponse.json({ error: '제목이 필요합니다' }, { status: 400 })
+    }
+
+    if (title.trim().length > 50) {
+      return NextResponse.json({ error: '제목은 50자 이하여야 합니다' }, { status: 400 })
+    }
+
+    const { data, error } = await supabase
+      .from('rooms')
+      .insert({ title: title.trim() })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return NextResponse.json(data, { status: 201 })
+  } catch (error) {
+    console.error('Error creating room:', error)
+    const msg = (error as { message?: string })?.message ?? String(error)
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+}
 
 /**
- * GET /api/rooms - 모든 방 조회 (검색)
+ * GET /api/rooms - 공유 코드로 방 조회
  */
 export async function GET(request: NextRequest) {
   try {
+    const supabase = getSupabase()
     const searchParams = request.nextUrl.searchParams
     const shareCode = searchParams.get('shareCode')
 

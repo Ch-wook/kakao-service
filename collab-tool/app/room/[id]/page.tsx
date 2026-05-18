@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useWidgets } from '@/hooks/useWidgets'
 import SetNicknameModal from '@/components/Auth/SetNicknameModal'
 import ChecklistWidget from '@/components/Widgets/ChecklistWidget'
+import ExpenseWidget from '@/components/Widgets/ExpenseWidget'
 import AddWidgetDrawer from '@/components/Widgets/AddWidgetDrawer'
 import { Share2, Users, Plus, ArrowLeft } from 'lucide-react'
 import { generateShareUrl } from '@/lib/utils'
@@ -33,12 +34,15 @@ export default function RoomPage() {
   const {
     widgets,
     isLoading: widgetsLoading,
+    error: widgetsError,
     createWidget,
     deleteWidget,
     addChecklistItem,
     toggleChecklistItem,
     updateChecklistItem,
     deleteChecklistItem,
+    updateExpenseData,
+    togglePayerStatus,
   } = useWidgets(roomId)
 
   // 방 정보 조회
@@ -125,8 +129,6 @@ export default function RoomPage() {
 
       if (!response.ok) {
         const data = await response.json()
-        // 닉네임 중복은 에러가 아님 - 이미 참여 중
-        if (data.error?.includes('이미')) return
         throw new Error(data.error || '참여 실패')
       }
 
@@ -152,25 +154,31 @@ export default function RoomPage() {
     }
   }
 
-  // 공유하기 (Web Share API → fallback: clipboard)
+  // 공유하기 - 클립보드 복사 우선, 모바일에서만 Web Share API 시도
   const handleShare = async () => {
     const shareUrl = generateShareUrl(roomId)
-    const shareData = {
-      title: room?.title || 'Collab 협업',
-      text: `${room?.title || '협업'}에 참여하세요!`,
-      url: shareUrl,
+
+    // 클립보드 복사 (항상)
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setShareSuccess(true)
+      setTimeout(() => setShareSuccess(false), 2000)
+    } catch {
+      // clipboard API 실패 시 무시
     }
 
-    try {
-      if (navigator.share && navigator.canShare?.(shareData)) {
-        await navigator.share(shareData)
-      } else {
-        await navigator.clipboard.writeText(shareUrl)
-        setShareSuccess(true)
-        setTimeout(() => setShareSuccess(false), 2000)
+    // 모바일에서만 Web Share API 추가 시도 (카카오톡 공유 등)
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+    if (isMobile && navigator.share) {
+      try {
+        await navigator.share({
+          title: room?.title || 'Collab 협업',
+          text: `${room?.title || '협업'}에 참여하세요!`,
+          url: shareUrl,
+        })
+      } catch {
+        // 사용자가 공유 취소 - 무시
       }
-    } catch {
-      // 사용자가 공유 취소 - 무시
     }
 
     if ('vibrate' in navigator) navigator.vibrate(50)
@@ -255,9 +263,9 @@ export default function RoomPage() {
       {/* ── Scrollable Content ── */}
       <main className="flex-1 overflow-y-auto overscroll-contain">
         <div className="px-4 py-4 space-y-3 pb-6">
-          {error && (
+          {(error || widgetsError) && (
             <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-700">
-              {error}
+              {error || widgetsError}
             </div>
           )}
 
@@ -286,13 +294,13 @@ export default function RoomPage() {
               </div>
               <p className="font-semibold text-gray-700 mb-1">아직 위젯이 없어요</p>
               <p className="text-sm text-gray-400 mb-6">
-                아래 버튼을 눌러 체크리스트를<br />추가해보세요
+                버튼을 눌러 체크리스트나<br />정산 위젯을 추가해보세요
               </p>
               <button
                 onClick={() => setShowAddWidget(true)}
-                className="px-5 py-2.5 bg-blue-500 text-white rounded-xl text-sm font-semibold"
+                className="px-6 py-3 bg-blue-500 text-white rounded-2xl text-sm font-semibold active:bg-blue-600 transition-colors"
               >
-                첫 위젯 추가하기
+                위젯 추가하기
               </button>
             </div>
           ) : (
@@ -308,6 +316,19 @@ export default function RoomPage() {
                     onAdd={addChecklistItem}
                     onUpdate={updateChecklistItem}
                     onDelete={deleteChecklistItem}
+                    onDeleteWidget={deleteWidget}
+                  />
+                )
+              }
+              if (widget.type === 'expense') {
+                return (
+                  <ExpenseWidget
+                    key={widget.id}
+                    widget={widget}
+                    nickname={session.nickname ?? undefined}
+                    participants={participants.map((p) => p.nickname)}
+                    onUpdateData={updateExpenseData}
+                    onTogglePayer={togglePayerStatus}
                     onDeleteWidget={deleteWidget}
                   />
                 )
@@ -328,16 +349,18 @@ export default function RoomPage() {
         </div>
       </main>
 
-      {/* ── Fixed Bottom Bar ── */}
-      <div className="flex-none bg-white border-t border-gray-100 px-4 py-3 pb-safe">
-        <button
-          onClick={() => setShowAddWidget(true)}
-          className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-500 text-white rounded-2xl font-semibold text-base active:bg-blue-600 transition-colors shadow-sm"
-        >
-          <Plus size={20} />
-          위젯 추가
-        </button>
-      </div>
+      {/* ── Fixed Bottom Bar (위젯이 있을 때만 표시) ── */}
+      {widgets.length > 0 && (
+        <div className="flex-none bg-white border-t border-gray-100 px-4 py-3 pb-safe">
+          <button
+            onClick={() => setShowAddWidget(true)}
+            className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-500 text-white rounded-2xl font-semibold text-base active:bg-blue-600 transition-colors shadow-sm"
+          >
+            <Plus size={20} />
+            위젯 추가하기
+          </button>
+        </div>
+      )}
 
       {/* 닉네임 모달 */}
       <SetNicknameModal
@@ -351,6 +374,7 @@ export default function RoomPage() {
         isOpen={showAddWidget}
         onClose={() => setShowAddWidget(false)}
         onAdd={createWidget}
+        error={widgetsError}
       />
     </div>
   )

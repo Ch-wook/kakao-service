@@ -1,14 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !key) throw new Error('Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인하세요.')
+  return createClient(url, key)
 }
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 /**
  * GET /api/widgets/[id] - 특정 위젯 조회
@@ -18,6 +16,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = getSupabase()
     const { id } = await params
 
     const { data, error } = await supabase
@@ -51,6 +50,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = getSupabase()
     const { id } = await params
     const body = await request.json()
     const { data: widgetData, title } = body
@@ -89,6 +89,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = getSupabase()
     const { id } = await params
 
     const { error } = await supabase

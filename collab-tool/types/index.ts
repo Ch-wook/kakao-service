@@ -39,18 +39,15 @@ export interface ChecklistData {
   [key: string]: unknown
 }
 
-export interface ExpenseItem {
-  id: string
-  description: string
-  amount: number
-  payer: string
-  date: string
-  category?: string
+export interface ExpensePayer {
+  name: string
+  paid: boolean
 }
 
 export interface ExpenseData {
-  items: ExpenseItem[]
-  total: number
+  totalAmount: number
+  description: string
+  payers: ExpensePayer[]
 }
 
 export interface VoteOption {

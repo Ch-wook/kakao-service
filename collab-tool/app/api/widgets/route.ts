@@ -1,20 +1,19 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !key) throw new Error('Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인하세요.')
+  return createClient(url, key)
 }
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 /**
  * GET /api/widgets?room_id=xxx - 특정 방의 위젯 목록 조회
  */
 export async function GET(request: NextRequest) {
   try {
+    const supabase = getSupabase()
     const roomId = request.nextUrl.searchParams.get('room_id')
 
     if (!roomId) {
@@ -47,6 +46,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabase()
     const body = await request.json()
     const { room_id, type, title, data: widgetData, order } = body
 
@@ -79,8 +79,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 기본 데이터 설정
-    const defaultData = type === 'checklist' ? { items: [] } : {}
+    const defaultDataMap: Record<string, unknown> = {
+      checklist: { items: [] },
+      expense: { totalAmount: 0, description: '', payers: [] },
+    }
+    const defaultData = defaultDataMap[type] ?? {}
 
     const { data, error } = await supabase
       .from('widgets')

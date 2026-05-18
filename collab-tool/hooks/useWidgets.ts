@@ -3,17 +3,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { generateId, getCurrentTimestamp } from '@/lib/utils'
-import type { Widget, ChecklistItem, ChecklistData } from '@/types'
+import type { Widget, ChecklistItem, ChecklistData, ExpenseData } from '@/types'
 
-// Widget.data를 ChecklistData로 안전하게 캐스팅하는 헬퍼
-const asChecklist = (data: Record<string, unknown>): ChecklistData => {
-  return data as unknown as ChecklistData
-}
+const asChecklist = (data: Record<string, unknown>): ChecklistData =>
+  data as unknown as ChecklistData
 
-// ChecklistData를 Widget.data로 안전하게 캐스팅하는 헬퍼
-const fromChecklist = (data: ChecklistData): Record<string, unknown> => {
-  return data as unknown as Record<string, unknown>
-}
+const fromChecklist = (data: ChecklistData): Record<string, unknown> =>
+  data as unknown as Record<string, unknown>
+
+const asExpense = (data: Record<string, unknown>): ExpenseData =>
+  data as unknown as ExpenseData
+
+const fromExpense = (data: ExpenseData): Record<string, unknown> =>
+  data as unknown as Record<string, unknown>
 
 export const useWidgets = (roomId: string) => {
   const [widgets, setWidgets] = useState<Widget[]>([])
@@ -119,8 +121,11 @@ export const useWidgets = (roomId: string) => {
     ): Promise<Widget | null> => {
       try {
         const maxOrder = widgets.length > 0 ? Math.max(...widgets.map((w) => w.order)) : -1
-        const defaultData: Record<string, unknown> =
-          type === 'checklist' ? { items: [] } : {}
+        const defaultDataMap: Record<string, Record<string, unknown>> = {
+          checklist: { items: [] },
+          expense: { totalAmount: 0, description: '', payers: [] },
+        }
+        const defaultData = defaultDataMap[type] ?? {}
 
         const { data, error: err } = await supabase
           .from('widgets')
@@ -135,10 +140,17 @@ export const useWidgets = (roomId: string) => {
           .single()
 
         if (err) throw err
-        return data as Widget
+        const newWidget = data as Widget
+        // Realtime을 기다리지 않고 즉시 로컬 상태에 반영
+        setWidgets((prev) => {
+          if (prev.some((w) => w.id === newWidget.id)) return prev
+          return [...prev, newWidget].sort((a, b) => a.order - b.order)
+        })
+        return newWidget
       } catch (err) {
         console.error('Error creating widget:', err)
-        setError('위젯 생성 중 오류가 발생했습니다')
+        const msg = (err as { message?: string })?.message ?? '위젯 생성 중 오류가 발생했습니다'
+        setError(msg)
         return null
       }
     },
@@ -368,6 +380,84 @@ export const useWidgets = (roomId: string) => {
     [widgets]
   )
 
+  // ─────────────────────────────────────────────
+  // 정산: 전체 데이터 업데이트
+  // ─────────────────────────────────────────────
+  const updateExpenseData = useCallback(
+    async (widgetId: string, newData: ExpenseData): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'expense') return false
+
+      const currentData = asExpense(widget.data)
+
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) => (w.id === widgetId ? { ...w, data: fromExpense(newData) } : w))
+      )
+
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: newData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+
+        if (err) throw err
+        return true
+      } catch (err) {
+        console.error('Error updating expense data:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? { ...w, data: fromExpense(currentData) } : w))
+        )
+        setError('정산 데이터 업데이트 중 오류가 발생했습니다')
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [widgets]
+  )
+
+  // ─────────────────────────────────────────────
+  // 정산: 납부 상태 토글 (낙관적 업데이트)
+  // ─────────────────────────────────────────────
+  const togglePayerStatus = useCallback(
+    async (widgetId: string, payerName: string): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'expense') return false
+
+      const currentData = asExpense(widget.data)
+      const updatedPayers = currentData.payers.map((p) =>
+        p.name === payerName ? { ...p, paid: !p.paid } : p
+      )
+      const updatedData: ExpenseData = { ...currentData, payers: updatedPayers }
+
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) => (w.id === widgetId ? { ...w, data: fromExpense(updatedData) } : w))
+      )
+
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: updatedData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+
+        if (err) throw err
+        return true
+      } catch (err) {
+        console.error('Error toggling payer status:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? { ...w, data: fromExpense(currentData) } : w))
+        )
+        setError('납부 상태 변경 중 오류가 발생했습니다')
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [widgets]
+  )
+
   return {
     widgets,
     isLoading,
@@ -379,5 +469,7 @@ export const useWidgets = (roomId: string) => {
     toggleChecklistItem,
     updateChecklistItem,
     deleteChecklistItem,
+    updateExpenseData,
+    togglePayerStatus,
   }
 }
