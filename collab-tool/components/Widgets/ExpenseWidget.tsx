@@ -84,9 +84,9 @@ export default function ExpenseWidget({
     setEditingPayerAmount(null)
   }
 
-  // ── 납부자 추가 (여러 이름 공백/줄바꿈 구분 지원) ──
+  // ── 납부자 추가 (쉼표로 여러 명 구분 지원) ──
   const addPayer = async (input: string) => {
-    const names = input.split(/[\s,]+/).map((n) => n.trim()).filter(Boolean)
+    const names = input.split(',').map((n) => n.trim()).filter(Boolean)
     const newOnes = names.filter((n) => !data.payers.some((p) => p.name === n))
     if (newOnes.length === 0) return
     setIsAddingPayer(true)
@@ -369,7 +369,7 @@ export default function ExpenseWidget({
             onKeyDown={(e) => {
               if (e.key === 'Enter') addPayer(newPayerName)
             }}
-            placeholder="이름 입력 (여러 명은 띄어쓰기로 구분)"
+            placeholder="이름 입력 (여러 명은 쉼표로 구분: 홍길동,김철수)"
             disabled={isAddingPayer}
             className="flex-1 text-sm text-gray-700 placeholder-gray-300 bg-transparent focus:outline-none disabled:opacity-50"
             maxLength={20}

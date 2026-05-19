@@ -65,7 +65,7 @@ export default function FeeWidget({
   }
 
   const handleAddEntry = async () => {
-    const names = newName.split(/[\s,]+/).map((n) => n.trim()).filter(Boolean)
+    const names = newName.split(',').map((n) => n.trim()).filter(Boolean)
     const newOnes = names.filter((n) => !data.entries.some((e) => e.name === n))
     if (newOnes.length === 0) return
     const note = newNote.trim() || undefined
@@ -327,7 +327,7 @@ export default function FeeWidget({
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleAddEntry() }}
-              placeholder="이름 (여러 명은 띄어쓰기로 구분)"
+              placeholder="이름 (여러 명은 쉼표로: 홍길동,김철수)"
               maxLength={20}
               autoFocus
               className="w-full text-sm px-3 py-2 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-teal-400"
@@ -368,7 +368,7 @@ export default function FeeWidget({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && newName.trim()) handleAddEntry()
                 }}
-                placeholder="이름 입력 (여러 명은 띄어쓰기로 구분)"
+                placeholder="이름 입력 (여러 명은 쉼표로: 홍길동,김철수)"
                 className="flex-1 text-sm text-gray-700 placeholder-gray-300 bg-transparent focus:outline-none"
                 maxLength={20}
               />
