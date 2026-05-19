@@ -20,8 +20,20 @@ export async function DELETE(
     const { id } = await params
     const supabase = getSupabaseAdmin()
 
-    const { error } = await supabase.from('rooms').delete().eq('id', id)
+    const { data, error } = await supabase
+      .from('rooms')
+      .delete()
+      .eq('id', id)
+      .select()
+
     if (error) throw error
+
+    if (!data || data.length === 0) {
+      return NextResponse.json(
+        { error: '삭제 실패: 방을 찾을 수 없거나 RLS 정책이 없습니다. Supabase SQL Editor에서 DELETE 정책을 추가해주세요.' },
+        { status: 404 }
+      )
+    }
 
     return NextResponse.json({ success: true })
   } catch (err) {
