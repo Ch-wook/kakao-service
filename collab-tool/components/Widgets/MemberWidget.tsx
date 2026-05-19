@@ -37,6 +37,7 @@ export default function MemberWidget({
   const [newGroupName, setNewGroupName] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
   const [editingMember, setEditingMember] = useState<{ groupId: string; memberId: string; name: string } | null>(null)
+  const [editingNote, setEditingNote] = useState<{ groupId: string; memberId: string; note: string } | null>(null)
 
   const totalMembers = groups.reduce((sum, g) => sum + g.members.length, 0)
   const attendingCount = groups.reduce(
@@ -75,6 +76,19 @@ export default function MemberWidget({
     )
     await onUpdateData(widget.id, { groups: updatedGroups })
     setEditingMember(null)
+  }
+
+  const handleEditMemberNote = async (groupId: string, memberId: string, note: string) => {
+    const updatedGroups = groups.map((g) =>
+      g.id !== groupId ? g : {
+        ...g,
+        members: g.members.map((m) =>
+          m.id !== memberId ? m : { ...m, note: note.trim() || undefined }
+        ),
+      }
+    )
+    await onUpdateData(widget.id, { groups: updatedGroups })
+    setEditingNote(null)
   }
 
   const handleRemoveMember = async (groupId: string, memberId: string) => {
@@ -174,27 +188,54 @@ export default function MemberWidget({
                         >
                           {cfg.label}
                         </button>
-                        {editingMember?.groupId === group.id && editingMember.memberId === member.id ? (
-                          <input
-                            type="text"
-                            value={editingMember.name}
-                            onChange={(e) => setEditingMember({ ...editingMember, name: e.target.value })}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleEditMemberName(group.id, member.id, editingMember.name)
-                              if (e.key === 'Escape') setEditingMember(null)
-                            }}
-                            onBlur={() => handleEditMemberName(group.id, member.id, editingMember.name)}
-                            autoFocus
-                            className="flex-1 text-sm px-2 py-1 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50"
-                          />
-                        ) : (
-                          <span
-                            className="flex-1 text-sm text-gray-800 cursor-pointer hover:text-blue-600"
-                            onClick={() => setEditingMember({ groupId: group.id, memberId: member.id, name: member.name })}
-                          >
-                            {member.name}
-                          </span>
-                        )}
+                        {/* 이름 + 메모 */}
+                        <div className="flex-1 min-w-0">
+                          {editingMember?.groupId === group.id && editingMember.memberId === member.id ? (
+                            <input
+                              type="text"
+                              value={editingMember.name}
+                              onChange={(e) => setEditingMember({ ...editingMember, name: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleEditMemberName(group.id, member.id, editingMember.name)
+                                if (e.key === 'Escape') setEditingMember(null)
+                              }}
+                              onBlur={() => handleEditMemberName(group.id, member.id, editingMember.name)}
+                              autoFocus
+                              className="w-full text-sm px-2 py-1 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50"
+                            />
+                          ) : (
+                            <span
+                              className="text-sm text-gray-800 cursor-pointer hover:text-blue-600 block truncate"
+                              onClick={() => setEditingMember({ groupId: group.id, memberId: member.id, name: member.name })}
+                            >
+                              {member.name}
+                            </span>
+                          )}
+                          {/* 메모 (도착시간 등) */}
+                          {editingNote?.groupId === group.id && editingNote.memberId === member.id ? (
+                            <input
+                              type="text"
+                              value={editingNote.note}
+                              onChange={(e) => setEditingNote({ ...editingNote, note: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleEditMemberNote(group.id, member.id, editingNote.note)
+                                if (e.key === 'Escape') setEditingNote(null)
+                              }}
+                              onBlur={() => handleEditMemberNote(group.id, member.id, editingNote.note)}
+                              autoFocus
+                              placeholder="메모 입력 (예: 9:30 도착)"
+                              maxLength={30}
+                              className="w-full text-xs px-2 py-0.5 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-300 bg-white mt-0.5"
+                            />
+                          ) : (
+                            <span
+                              className="text-xs text-gray-400 block truncate cursor-pointer hover:text-blue-400 mt-0.5"
+                              onClick={() => setEditingNote({ groupId: group.id, memberId: member.id, note: member.note ?? '' })}
+                            >
+                              {member.note || <span className="text-gray-200">+ 메모</span>}
+                            </span>
+                          )}
+                        </div>
                         <button
                           onClick={() => handleRemoveMember(group.id, member.id)}
                           className="flex-none p-1 text-gray-200 hover:text-gray-400 rounded transition-colors"

@@ -36,6 +36,12 @@ const WIDGET_OPTIONS: {
     description: '그룹별 멤버와 참석 현황을 관리하세요',
     emoji: '👥',
   },
+  {
+    type: 'fee',
+    label: '납부 체크',
+    description: '누가 어떤 항목을 얼마나 냈는지 관리하세요',
+    emoji: '💳',
+  },
 ]
 
 export default function AddWidgetDrawer({ isOpen, onClose, onAdd, error }: AddWidgetDrawerProps) {

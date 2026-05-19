@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const validTypes = ['checklist', 'expense', 'member', 'ledger', 'vote', 'memo', 'schedule', 'roles', 'poll']
+    const validTypes = ['checklist', 'expense', 'member', 'ledger', 'fee', 'vote', 'memo', 'schedule', 'roles', 'poll']
     if (!validTypes.includes(type)) {
       return NextResponse.json(
         { error: '유효하지 않은 위젯 타입입니다' },
@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
       checklist: { items: [] },
       expense: { totalAmount: 0, description: '', payers: [] },
       ledger: { entries: [] },
+      fee: { defaultAmount: 0, entries: [] },
     }
     const defaultData = defaultDataMap[type] ?? {}
 

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { generateId, getCurrentTimestamp } from '@/lib/utils'
-import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData } from '@/types'
+import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData } from '@/types'
 
 const asChecklist = (data: Record<string, unknown>): ChecklistData =>
   data as unknown as ChecklistData
@@ -27,6 +27,12 @@ const asLedger = (data: Record<string, unknown>): LedgerData =>
   data as unknown as LedgerData
 
 const fromLedger = (data: LedgerData): Record<string, unknown> =>
+  data as unknown as Record<string, unknown>
+
+const asFee = (data: Record<string, unknown>): FeeData =>
+  data as unknown as FeeData
+
+const fromFee = (data: FeeData): Record<string, unknown> =>
   data as unknown as Record<string, unknown>
 
 export const useWidgets = (roomId: string) => {
@@ -138,6 +144,7 @@ export const useWidgets = (roomId: string) => {
           expense: { totalAmount: 0, description: '', payers: [] },
           member: { groups: [{ id: generateId(), name: '참석 현황', targetCount: 0, members: [] }] },
           ledger: { entries: [] },
+          fee: { defaultAmount: 0, entries: [] },
         }
         const defaultData = defaultDataMap[type] ?? {}
 
@@ -609,6 +616,84 @@ export const useWidgets = (roomId: string) => {
     [widgets]
   )
 
+  // ─────────────────────────────────────────────
+  // 납부 체크: 전체 데이터 업데이트
+  // ─────────────────────────────────────────────
+  const updateFeeData = useCallback(
+    async (widgetId: string, newData: FeeData): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'fee') return false
+
+      const currentData = asFee(widget.data)
+
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) => (w.id === widgetId ? { ...w, data: fromFee(newData) } : w))
+      )
+
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: newData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+
+        if (err) throw err
+        return true
+      } catch (err) {
+        console.error('Error updating fee data:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? { ...w, data: fromFee(currentData) } : w))
+        )
+        setError('납부 데이터 업데이트 중 오류가 발생했습니다')
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [widgets]
+  )
+
+  // ─────────────────────────────────────────────
+  // 납부 체크: 납부 상태 토글 (낙관적 업데이트)
+  // ─────────────────────────────────────────────
+  const toggleFeeEntry = useCallback(
+    async (widgetId: string, entryId: string): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'fee') return false
+
+      const currentData = asFee(widget.data)
+      const updatedEntries = currentData.entries.map((e) =>
+        e.id === entryId ? { ...e, paid: !e.paid } : e
+      )
+      const updatedData: FeeData = { ...currentData, entries: updatedEntries }
+
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) => (w.id === widgetId ? { ...w, data: fromFee(updatedData) } : w))
+      )
+
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: updatedData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+
+        if (err) throw err
+        return true
+      } catch (err) {
+        console.error('Error toggling fee entry:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? { ...w, data: fromFee(currentData) } : w))
+        )
+        setError('납부 상태 변경 중 오류가 발생했습니다')
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [widgets]
+  )
+
   return {
     widgets,
     isLoading,
@@ -625,5 +710,7 @@ export const useWidgets = (roomId: string) => {
     updateMemberData,
     toggleMemberStatus,
     updateLedgerData,
+    updateFeeData,
+    toggleFeeEntry,
   }
 }

@@ -10,6 +10,7 @@ import ChecklistWidget from '@/components/Widgets/ChecklistWidget'
 import ExpenseWidget from '@/components/Widgets/ExpenseWidget'
 import MemberWidget from '@/components/Widgets/MemberWidget'
 import LedgerWidget from '@/components/Widgets/LedgerWidget'
+import FeeWidget from '@/components/Widgets/FeeWidget'
 import AddWidgetDrawer from '@/components/Widgets/AddWidgetDrawer'
 import { Share2, Users, Plus, ArrowLeft, LayoutGrid, BookOpen } from 'lucide-react'
 import { generateShareUrl } from '@/lib/utils'
@@ -53,6 +54,8 @@ export default function RoomPage() {
     updateMemberData,
     toggleMemberStatus,
     updateLedgerData,
+    updateFeeData,
+    toggleFeeEntry,
   } = useWidgets(roomId)
 
   // 장부 위젯과 일반 위젯 분리
@@ -386,6 +389,19 @@ export default function RoomPage() {
                         widget={widget}
                         onUpdateData={updateMemberData}
                         onToggleStatus={toggleMemberStatus}
+                        onDeleteWidget={deleteWidget}
+                      />
+                    )
+                  }
+                  if (widget.type === 'fee') {
+                    return (
+                      <FeeWidget
+                        key={widget.id}
+                        widget={widget}
+                        nickname={session.nickname ?? undefined}
+                        participants={participants.map((p) => p.nickname)}
+                        onUpdateData={updateFeeData}
+                        onToggleEntry={toggleFeeEntry}
                         onDeleteWidget={deleteWidget}
                       />
                     )
