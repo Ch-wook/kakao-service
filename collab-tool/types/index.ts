@@ -17,7 +17,7 @@ export interface Participant {
 export interface Widget {
   id: string
   room_id: string
-  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll' | 'member'
+  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll' | 'member' | 'ledger'
   title?: string
   data: Record<string, unknown>
   order: number
@@ -110,4 +110,19 @@ export interface MemberGroup {
 
 export interface MemberData {
   groups: MemberGroup[]
+}
+
+export type LedgerEntryType = 'expense' | 'income'
+
+export interface LedgerEntry {
+  id: string
+  date: string
+  category: string
+  description: string
+  amount: number
+  type: LedgerEntryType
+}
+
+export interface LedgerData {
+  entries: LedgerEntry[]
 }

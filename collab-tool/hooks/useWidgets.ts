@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { generateId, getCurrentTimestamp } from '@/lib/utils'
-import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus } from '@/types'
+import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData } from '@/types'
 
 const asChecklist = (data: Record<string, unknown>): ChecklistData =>
   data as unknown as ChecklistData
@@ -21,6 +21,12 @@ const asMember = (data: Record<string, unknown>): MemberData =>
   data as unknown as MemberData
 
 const fromMember = (data: MemberData): Record<string, unknown> =>
+  data as unknown as Record<string, unknown>
+
+const asLedger = (data: Record<string, unknown>): LedgerData =>
+  data as unknown as LedgerData
+
+const fromLedger = (data: LedgerData): Record<string, unknown> =>
   data as unknown as Record<string, unknown>
 
 export const useWidgets = (roomId: string) => {
@@ -131,6 +137,7 @@ export const useWidgets = (roomId: string) => {
           checklist: { items: [] },
           expense: { totalAmount: 0, description: '', payers: [] },
           member: { groups: [{ id: generateId(), name: '참석 현황', targetCount: 0, members: [] }] },
+          ledger: { entries: [] },
         }
         const defaultData = defaultDataMap[type] ?? {}
 
@@ -565,6 +572,43 @@ export const useWidgets = (roomId: string) => {
     [widgets]
   )
 
+  // ─────────────────────────────────────────────
+  // 회계 장부: 전체 데이터 업데이트
+  // ─────────────────────────────────────────────
+  const updateLedgerData = useCallback(
+    async (widgetId: string, newData: LedgerData): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'ledger') return false
+
+      const currentData = asLedger(widget.data)
+
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) => (w.id === widgetId ? { ...w, data: fromLedger(newData) } : w))
+      )
+
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: newData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+
+        if (err) throw err
+        return true
+      } catch (err) {
+        console.error('Error updating ledger data:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? { ...w, data: fromLedger(currentData) } : w))
+        )
+        setError('장부 데이터 업데이트 중 오류가 발생했습니다')
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [widgets]
+  )
+
   return {
     widgets,
     isLoading,
@@ -580,5 +624,6 @@ export const useWidgets = (roomId: string) => {
     togglePayerStatus,
     updateMemberData,
     toggleMemberStatus,
+    updateLedgerData,
   }
 }

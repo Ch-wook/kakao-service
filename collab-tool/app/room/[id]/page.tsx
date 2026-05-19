@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
@@ -9,10 +9,13 @@ import SetNicknameModal from '@/components/Auth/SetNicknameModal'
 import ChecklistWidget from '@/components/Widgets/ChecklistWidget'
 import ExpenseWidget from '@/components/Widgets/ExpenseWidget'
 import MemberWidget from '@/components/Widgets/MemberWidget'
+import LedgerWidget from '@/components/Widgets/LedgerWidget'
 import AddWidgetDrawer from '@/components/Widgets/AddWidgetDrawer'
-import { Share2, Users, Plus, ArrowLeft } from 'lucide-react'
+import { Share2, Users, Plus, ArrowLeft, LayoutGrid, BookOpen } from 'lucide-react'
 import { generateShareUrl } from '@/lib/utils'
 import type { Room, Participant } from '@/types'
+
+type ActiveTab = 'widgets' | 'ledger'
 
 export default function RoomPage() {
   const params = useParams()
@@ -31,6 +34,9 @@ export default function RoomPage() {
   const [error, setError] = useState<string | null>(null)
   const [shareSuccess, setShareSuccess] = useState(false)
   const [hasJoined, setHasJoined] = useState(false)
+  const [activeTab, setActiveTab] = useState<ActiveTab>('widgets')
+  const [isCreatingLedger, setIsCreatingLedger] = useState(false)
+  const ledgerInitRef = useRef(false)
 
   const {
     widgets,
@@ -46,7 +52,12 @@ export default function RoomPage() {
     togglePayerStatus,
     updateMemberData,
     toggleMemberStatus,
+    updateLedgerData,
   } = useWidgets(roomId)
+
+  // 장부 위젯과 일반 위젯 분리
+  const ledgerWidget = widgets.find((w) => w.type === 'ledger')
+  const displayWidgets = widgets.filter((w) => w.type !== 'ledger')
 
   // 방 정보 조회
   useEffect(() => {
@@ -122,6 +133,21 @@ export default function RoomPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.user, authLoading, hasJoined])
 
+  // 장부 탭 진입 시 ledger 위젯 자동 생성
+  useEffect(() => {
+    if (
+      activeTab === 'ledger' &&
+      !widgetsLoading &&
+      !ledgerWidget &&
+      !isCreatingLedger &&
+      !ledgerInitRef.current
+    ) {
+      ledgerInitRef.current = true
+      setIsCreatingLedger(true)
+      createWidget('ledger', '회계 장부').finally(() => setIsCreatingLedger(false))
+    }
+  }, [activeTab, widgetsLoading, ledgerWidget, isCreatingLedger, createWidget])
+
   const joinRoom = async (nickname: string) => {
     try {
       const response = await fetch(`/api/rooms/${roomId}`, {
@@ -157,11 +183,9 @@ export default function RoomPage() {
     }
   }
 
-  // 공유하기 - 클립보드 복사 우선, 모바일에서만 Web Share API 시도
   const handleShare = async () => {
     const shareUrl = generateShareUrl(roomId)
 
-    // 클립보드 복사 (항상)
     try {
       await navigator.clipboard.writeText(shareUrl)
       setShareSuccess(true)
@@ -170,7 +194,6 @@ export default function RoomPage() {
       // clipboard API 실패 시 무시
     }
 
-    // 모바일에서만 Web Share API 추가 시도 (카카오톡 공유 등)
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
     if (isMobile && navigator.share) {
       try {
@@ -187,13 +210,11 @@ export default function RoomPage() {
     if ('vibrate' in navigator) navigator.vibrate(50)
   }
 
-  // 체크 토글 + 햅틱
   const handleToggle = async (widgetId: string, itemId: string) => {
     if ('vibrate' in navigator) navigator.vibrate(30)
     return toggleChecklistItem(widgetId, itemId)
   }
 
-  // 로딩
   if (authLoading || isLoadingRoom) {
     return (
       <div className="h-dvh bg-gray-50 flex items-center justify-center">
@@ -205,7 +226,6 @@ export default function RoomPage() {
     )
   }
 
-  // 방 없음
   if (error && !room) {
     return (
       <div className="h-dvh bg-gray-50 flex items-center justify-center p-4">
@@ -229,7 +249,6 @@ export default function RoomPage() {
       {/* ── Sticky Header ── */}
       <header className="flex-none bg-white border-b border-gray-100 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
-          {/* 왼쪽: 뒤로가기 + 방 제목 */}
           <div className="flex items-center gap-2 min-w-0">
             <button
               onClick={() => router.back()}
@@ -252,7 +271,6 @@ export default function RoomPage() {
             </div>
           </div>
 
-          {/* 오른쪽: 공유 버튼 */}
           <button
             onClick={handleShare}
             className="flex-none flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-600 rounded-xl text-sm font-medium active:bg-blue-100 transition-colors"
@@ -263,117 +281,162 @@ export default function RoomPage() {
         </div>
       </header>
 
-      {/* ── Scrollable Content ── */}
-      <main className="flex-1 overflow-y-auto overscroll-contain">
-        <div className="px-4 py-4 space-y-3 pb-6">
-          {(error || widgetsError) && (
-            <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-700">
-              {error || widgetsError}
-            </div>
-          )}
+      {/* ── 탭 바 ── */}
+      <div className="flex-none flex bg-white border-b border-gray-100">
+        <button
+          onClick={() => setActiveTab('widgets')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold transition-colors border-b-2 ${
+            activeTab === 'widgets'
+              ? 'text-blue-600 border-blue-500'
+              : 'text-gray-400 border-transparent'
+          }`}
+        >
+          <LayoutGrid size={14} />
+          위젯
+        </button>
+        <button
+          onClick={() => setActiveTab('ledger')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold transition-colors border-b-2 ${
+            activeTab === 'ledger'
+              ? 'text-violet-600 border-violet-500'
+              : 'text-gray-400 border-transparent'
+          }`}
+        >
+          <BookOpen size={14} />
+          회계 장부
+        </button>
+      </div>
 
-          {widgetsLoading ? (
-            // Skeleton UI
-            <div className="space-y-3">
-              {[1, 2].map((i) => (
-                <div key={i} className="bg-white rounded-2xl border border-gray-100 p-4 animate-pulse">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-4 h-4 bg-gray-200 rounded-full" />
-                    <div className="h-4 bg-gray-200 rounded w-1/3" />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="h-3 bg-gray-100 rounded w-full" />
-                    <div className="h-3 bg-gray-100 rounded w-4/5" />
-                    <div className="h-3 bg-gray-100 rounded w-3/5" />
-                  </div>
+      {/* ── 위젯 탭 ── */}
+      {activeTab === 'widgets' && (
+        <>
+          <main className="flex-1 overflow-y-auto overscroll-contain">
+            <div className="px-4 py-4 space-y-3 pb-6">
+              {(error || widgetsError) && (
+                <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-700">
+                  {error || widgetsError}
                 </div>
-              ))}
+              )}
+
+              {widgetsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="bg-white rounded-2xl border border-gray-100 p-4 animate-pulse">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-4 h-4 bg-gray-200 rounded-full" />
+                        <div className="h-4 bg-gray-200 rounded w-1/3" />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="h-3 bg-gray-100 rounded w-full" />
+                        <div className="h-3 bg-gray-100 rounded w-4/5" />
+                        <div className="h-3 bg-gray-100 rounded w-3/5" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : displayWidgets.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-4">
+                    <Plus size={28} className="text-blue-400" />
+                  </div>
+                  <p className="font-semibold text-gray-700 mb-1">아직 위젯이 없어요</p>
+                  <p className="text-sm text-gray-400 mb-6">
+                    체크리스트, 정산, 멤버 관리 등<br />위젯을 추가해보세요
+                  </p>
+                  <button
+                    onClick={() => setShowAddWidget(true)}
+                    className="px-6 py-3 bg-blue-500 text-white rounded-2xl text-sm font-semibold active:bg-blue-600 transition-colors"
+                  >
+                    위젯 추가하기
+                  </button>
+                </div>
+              ) : (
+                displayWidgets.map((widget) => {
+                  if (widget.type === 'checklist') {
+                    return (
+                      <ChecklistWidget
+                        key={widget.id}
+                        widget={widget}
+                        nickname={session.nickname ?? undefined}
+                        onToggle={handleToggle}
+                        onAdd={addChecklistItem}
+                        onUpdate={updateChecklistItem}
+                        onDelete={deleteChecklistItem}
+                        onDeleteWidget={deleteWidget}
+                      />
+                    )
+                  }
+                  if (widget.type === 'expense') {
+                    return (
+                      <ExpenseWidget
+                        key={widget.id}
+                        widget={widget}
+                        nickname={session.nickname ?? undefined}
+                        participants={participants.map((p) => p.nickname)}
+                        onUpdateData={updateExpenseData}
+                        onTogglePayer={togglePayerStatus}
+                        onDeleteWidget={deleteWidget}
+                      />
+                    )
+                  }
+                  if (widget.type === 'member') {
+                    return (
+                      <MemberWidget
+                        key={widget.id}
+                        widget={widget}
+                        onUpdateData={updateMemberData}
+                        onToggleStatus={toggleMemberStatus}
+                        onDeleteWidget={deleteWidget}
+                      />
+                    )
+                  }
+                  return (
+                    <div
+                      key={widget.id}
+                      className="bg-white rounded-2xl border border-gray-100 p-4 opacity-60"
+                    >
+                      <p className="text-sm text-gray-400">
+                        {widget.title || widget.type} (준비 중)
+                      </p>
+                    </div>
+                  )
+                })
+              )}
             </div>
-          ) : widgets.length === 0 ? (
-            // Empty state
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-4">
-                <Plus size={28} className="text-blue-400" />
-              </div>
-              <p className="font-semibold text-gray-700 mb-1">아직 위젯이 없어요</p>
-              <p className="text-sm text-gray-400 mb-6">
-                체크리스트, 정산, 멤버 관리 등<br />위젯을 추가해보세요
-              </p>
+          </main>
+
+          {/* 위젯 추가 버튼 (위젯이 있을 때) */}
+          {displayWidgets.length > 0 && (
+            <div className="flex-none bg-white border-t border-gray-100 px-4 py-3 pb-safe">
               <button
                 onClick={() => setShowAddWidget(true)}
-                className="px-6 py-3 bg-blue-500 text-white rounded-2xl text-sm font-semibold active:bg-blue-600 transition-colors"
+                className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-500 text-white rounded-2xl font-semibold text-base active:bg-blue-600 transition-colors shadow-sm"
               >
+                <Plus size={20} />
                 위젯 추가하기
               </button>
             </div>
-          ) : (
-            // 위젯 목록
-            widgets.map((widget) => {
-              if (widget.type === 'checklist') {
-                return (
-                  <ChecklistWidget
-                    key={widget.id}
-                    widget={widget}
-                    nickname={session.nickname ?? undefined}
-                    onToggle={handleToggle}
-                    onAdd={addChecklistItem}
-                    onUpdate={updateChecklistItem}
-                    onDelete={deleteChecklistItem}
-                    onDeleteWidget={deleteWidget}
-                  />
-                )
-              }
-              if (widget.type === 'expense') {
-                return (
-                  <ExpenseWidget
-                    key={widget.id}
-                    widget={widget}
-                    nickname={session.nickname ?? undefined}
-                    participants={participants.map((p) => p.nickname)}
-                    onUpdateData={updateExpenseData}
-                    onTogglePayer={togglePayerStatus}
-                    onDeleteWidget={deleteWidget}
-                  />
-                )
-              }
-              if (widget.type === 'member') {
-                return (
-                  <MemberWidget
-                    key={widget.id}
-                    widget={widget}
-                    onUpdateData={updateMemberData}
-                    onToggleStatus={toggleMemberStatus}
-                    onDeleteWidget={deleteWidget}
-                  />
-                )
-              }
-              // 미구현 위젯 placeholder
-              return (
-                <div
-                  key={widget.id}
-                  className="bg-white rounded-2xl border border-gray-100 p-4 opacity-60"
-                >
-                  <p className="text-sm text-gray-400">
-                    {widget.title || widget.type} (준비 중)
-                  </p>
-                </div>
-              )
-            })
           )}
-        </div>
-      </main>
+        </>
+      )}
 
-      {/* ── Fixed Bottom Bar (위젯이 있을 때만 표시) ── */}
-      {widgets.length > 0 && (
-        <div className="flex-none bg-white border-t border-gray-100 px-4 py-3 pb-safe">
-          <button
-            onClick={() => setShowAddWidget(true)}
-            className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-500 text-white rounded-2xl font-semibold text-base active:bg-blue-600 transition-colors shadow-sm"
-          >
-            <Plus size={20} />
-            위젯 추가하기
-          </button>
-        </div>
+      {/* ── 장부 탭 ── */}
+      {activeTab === 'ledger' && (
+        <main className="flex-1 overflow-y-auto overscroll-contain">
+          <div className="px-4 py-4 pb-6">
+            {isCreatingLedger || (widgetsLoading && !ledgerWidget) ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="animate-spin w-8 h-8 border-4 border-violet-400 border-t-transparent rounded-full mb-3" />
+                <p className="text-sm text-gray-400">장부 불러오는 중...</p>
+              </div>
+            ) : ledgerWidget ? (
+              <LedgerWidget
+                widget={ledgerWidget}
+                onUpdateData={updateLedgerData}
+              />
+            ) : null}
+          </div>
+        </main>
       )}
 
       {/* 닉네임 모달 */}
