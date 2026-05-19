@@ -433,9 +433,19 @@ export const useWidgets = (roomId: string) => {
       if (!widget || widget.type !== 'expense') return false
 
       const currentData = asExpense(widget.data)
-      const updatedPayers = currentData.payers.map((p) =>
-        p.name === payerName ? { ...p, paid: !p.paid } : p
-      )
+      const perPerson =
+        currentData.payers.length > 0 && currentData.totalAmount > 0
+          ? Math.ceil(currentData.totalAmount / currentData.payers.length)
+          : 0
+      const updatedPayers = currentData.payers.map((p) => {
+        if (p.name !== payerName) return p
+        const becomingPaid = !p.paid
+        return {
+          ...p,
+          paid: becomingPaid,
+          paidAmount: becomingPaid && !p.paidAmount && perPerson > 0 ? perPerson : p.paidAmount,
+        }
+      })
       const updatedData: ExpenseData = { ...currentData, payers: updatedPayers }
 
       optimisticUpdates.current.add(widgetId)

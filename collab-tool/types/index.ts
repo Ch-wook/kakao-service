@@ -42,6 +42,7 @@ export interface ChecklistData {
 export interface ExpensePayer {
   name: string
   paid: boolean
+  paidAmount?: number
 }
 
 export interface ExpenseData {

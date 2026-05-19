@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const validTypes = ['checklist', 'expense', 'vote', 'memo', 'schedule', 'roles', 'poll']
+    const validTypes = ['checklist', 'expense', 'member', 'vote', 'memo', 'schedule', 'roles', 'poll']
     if (!validTypes.includes(type)) {
       return NextResponse.json(
         { error: '유효하지 않은 위젯 타입입니다' },

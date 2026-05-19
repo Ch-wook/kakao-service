@@ -34,12 +34,18 @@ export default function ExpenseWidget({
   const [editDesc, setEditDesc] = useState('')
   const [newPayerName, setNewPayerName] = useState('')
   const [isAddingPayer, setIsAddingPayer] = useState(false)
+  const [editingPayerAmount, setEditingPayerAmount] = useState<{ name: string; value: string } | null>(null)
 
   const paidCount = data.payers.filter((p) => p.paid).length
   const perPerson =
     data.payers.length > 0 && data.totalAmount > 0
       ? Math.ceil(data.totalAmount / data.payers.length)
       : 0
+
+  const totalCollected = data.payers
+    .filter((p) => p.paid)
+    .reduce((sum, p) => sum + (p.paidAmount ?? perPerson), 0)
+  const remaining = Math.max(0, data.totalAmount - totalCollected)
 
   const fmt = (n: number) => n.toLocaleString('ko-KR')
 
@@ -63,6 +69,19 @@ export default function ExpenseWidget({
   const handleToggle = async (name: string) => {
     if ('vibrate' in navigator) navigator.vibrate(30)
     await onTogglePayer(widget.id, name)
+  }
+
+  // ── 개인 납부액 편집 ──
+  const handlePayerAmountSave = async (name: string, valueStr: string) => {
+    const amount = parseInt(valueStr.replace(/[^0-9]/g, ''), 10)
+    if (!isNaN(amount) && amount >= 0) {
+      await update({
+        payers: data.payers.map((p) =>
+          p.name !== name ? p : { ...p, paidAmount: amount }
+        ),
+      })
+    }
+    setEditingPayerAmount(null)
   }
 
   // ── 납부자 추가 ──
@@ -224,6 +243,26 @@ export default function ExpenseWidget({
             )}
           </div>
         )}
+
+        {/* 납부 현황 요약 */}
+        {data.payers.length > 0 && data.totalAmount > 0 && (
+          <div className="mt-3 pt-3 border-t border-emerald-100 grid grid-cols-2 gap-2">
+            <div className="bg-white/70 rounded-xl px-3 py-2">
+              <div className="text-xs text-emerald-600 font-medium mb-0.5">납부 완료</div>
+              <div className="text-sm font-bold text-emerald-700 tabular-nums">
+                {fmt(totalCollected)}원
+              </div>
+              <div className="text-xs text-gray-400">{paidCount}명</div>
+            </div>
+            <div className="bg-white/70 rounded-xl px-3 py-2">
+              <div className="text-xs text-red-400 font-medium mb-0.5">미납</div>
+              <div className="text-sm font-bold text-red-500 tabular-nums">
+                {fmt(remaining)}원
+              </div>
+              <div className="text-xs text-gray-400">{data.payers.length - paidCount}명</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 납부자 목록 */}
@@ -262,15 +301,47 @@ export default function ExpenseWidget({
               )}
             </span>
 
-            {/* 개인 금액 */}
+            {/* 납부 금액 (납부 완료 시 편집 가능, 미납 시 회색 표시) */}
             {perPerson > 0 && (
-              <span
-                className={`text-sm font-medium tabular-nums ${
-                  payer.paid ? 'text-gray-300' : 'text-gray-600'
-                }`}
-              >
-                {fmt(perPerson)}원
-              </span>
+              payer.paid ? (
+                editingPayerAmount?.name === payer.name ? (
+                  <input
+                    type="number"
+                    value={editingPayerAmount.value}
+                    onChange={(e) =>
+                      setEditingPayerAmount({ ...editingPayerAmount, value: e.target.value })
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter')
+                        handlePayerAmountSave(payer.name, editingPayerAmount.value)
+                      if (e.key === 'Escape') setEditingPayerAmount(null)
+                    }}
+                    onBlur={() =>
+                      handlePayerAmountSave(payer.name, editingPayerAmount.value)
+                    }
+                    className="w-24 text-sm text-right border border-emerald-300 rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 tabular-nums"
+                    autoFocus
+                    min={0}
+                  />
+                ) : (
+                  <button
+                    onClick={() =>
+                      setEditingPayerAmount({
+                        name: payer.name,
+                        value: String(payer.paidAmount ?? perPerson),
+                      })
+                    }
+                    className="text-sm font-semibold tabular-nums text-emerald-600 active:opacity-60 underline-offset-2 hover:underline"
+                    title="탭하여 금액 수정"
+                  >
+                    {fmt(payer.paidAmount ?? perPerson)}원
+                  </button>
+                )
+              ) : (
+                <span className="text-sm tabular-nums text-gray-300">
+                  {fmt(perPerson)}원
+                </span>
+              )
             )}
 
             {/* 삭제 버튼 */}
