@@ -25,6 +25,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '제목은 50자 이하여야 합니다' }, { status: 400 })
     }
 
+    const maxRooms = parseInt(process.env.MAX_ROOMS ?? '300', 10)
+    const { count } = await supabase.from('rooms').select('*', { count: 'exact', head: true })
+    if (count !== null && count >= maxRooms) {
+      return NextResponse.json(
+        { error: '서버 방 생성 한도에 도달했습니다. 관리자에게 문의하세요.' },
+        { status: 503 }
+      )
+    }
+
     const { data, error } = await supabase
       .from('rooms')
       .insert({ title: title.trim() })

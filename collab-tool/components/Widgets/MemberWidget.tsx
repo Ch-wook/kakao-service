@@ -36,6 +36,7 @@ export default function MemberWidget({
   const [addingGroup, setAddingGroup] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
+  const [editingMember, setEditingMember] = useState<{ groupId: string; memberId: string; name: string } | null>(null)
 
   const totalMembers = groups.reduce((sum, g) => sum + g.members.length, 0)
   const attendingCount = groups.reduce(
@@ -64,6 +65,16 @@ export default function MemberWidget({
     await onUpdateData(widget.id, { groups: updatedGroups })
     setNewMemberName('')
     setAddingMemberGroupId(null)
+  }
+
+  const handleEditMemberName = async (groupId: string, memberId: string, newName: string) => {
+    const name = newName.trim()
+    if (!name) { setEditingMember(null); return }
+    const updatedGroups = groups.map((g) =>
+      g.id !== groupId ? g : { ...g, members: g.members.map((m) => m.id !== memberId ? m : { ...m, name }) }
+    )
+    await onUpdateData(widget.id, { groups: updatedGroups })
+    setEditingMember(null)
   }
 
   const handleRemoveMember = async (groupId: string, memberId: string) => {
@@ -163,7 +174,27 @@ export default function MemberWidget({
                         >
                           {cfg.label}
                         </button>
-                        <span className="flex-1 text-sm text-gray-800">{member.name}</span>
+                        {editingMember?.groupId === group.id && editingMember.memberId === member.id ? (
+                          <input
+                            type="text"
+                            value={editingMember.name}
+                            onChange={(e) => setEditingMember({ ...editingMember, name: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleEditMemberName(group.id, member.id, editingMember.name)
+                              if (e.key === 'Escape') setEditingMember(null)
+                            }}
+                            onBlur={() => handleEditMemberName(group.id, member.id, editingMember.name)}
+                            autoFocus
+                            className="flex-1 text-sm px-2 py-1 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50"
+                          />
+                        ) : (
+                          <span
+                            className="flex-1 text-sm text-gray-800 cursor-pointer hover:text-blue-600"
+                            onClick={() => setEditingMember({ groupId: group.id, memberId: member.id, name: member.name })}
+                          >
+                            {member.name}
+                          </span>
+                        )}
                         <button
                           onClick={() => handleRemoveMember(group.id, member.id)}
                           className="flex-none p-1 text-gray-200 hover:text-gray-400 rounded transition-colors"

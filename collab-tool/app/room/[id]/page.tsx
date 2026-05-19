@@ -297,7 +297,7 @@ export default function RoomPage() {
               </div>
               <p className="font-semibold text-gray-700 mb-1">아직 위젯이 없어요</p>
               <p className="text-sm text-gray-400 mb-6">
-                버튼을 눌러 체크리스트나<br />정산 위젯을 추가해보세요
+                체크리스트, 정산, 멤버 관리 등<br />위젯을 추가해보세요
               </p>
               <button
                 onClick={() => setShowAddWidget(true)}
