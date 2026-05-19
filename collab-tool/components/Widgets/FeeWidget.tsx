@@ -65,15 +65,17 @@ export default function FeeWidget({
   }
 
   const handleAddEntry = async () => {
-    const name = newName.trim()
-    if (!name || data.entries.some((e) => e.name === name)) return
-    const newEntry: FeeEntry = {
+    const names = newName.split(/[\s,]+/).map((n) => n.trim()).filter(Boolean)
+    const newOnes = names.filter((n) => !data.entries.some((e) => e.name === n))
+    if (newOnes.length === 0) return
+    const note = newNote.trim() || undefined
+    const newEntries: FeeEntry[] = newOnes.map((name) => ({
       id: generateId(),
       name,
       paid: false,
-      note: newNote.trim() || undefined,
-    }
-    await update({ entries: [...data.entries, newEntry] })
+      note: newOnes.length === 1 ? note : undefined, // 여러 명 일괄 추가 시 비고 미적용
+    }))
+    await update({ entries: [...data.entries, ...newEntries] })
     setNewName('')
     setNewNote('')
     setIsAddingEntry(false)
@@ -325,7 +327,7 @@ export default function FeeWidget({
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleAddEntry() }}
-              placeholder="이름"
+              placeholder="이름 (여러 명은 띄어쓰기로 구분)"
               maxLength={20}
               autoFocus
               className="w-full text-sm px-3 py-2 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-teal-400"
@@ -366,7 +368,7 @@ export default function FeeWidget({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && newName.trim()) handleAddEntry()
                 }}
-                placeholder="이름 입력 후 Enter..."
+                placeholder="이름 입력 (여러 명은 띄어쓰기로 구분)"
                 className="flex-1 text-sm text-gray-700 placeholder-gray-300 bg-transparent focus:outline-none"
                 maxLength={20}
               />

@@ -84,12 +84,14 @@ export default function ExpenseWidget({
     setEditingPayerAmount(null)
   }
 
-  // ── 납부자 추가 ──
-  const addPayer = async (name: string) => {
-    if (!name.trim() || data.payers.some((p) => p.name === name)) return
+  // ── 납부자 추가 (여러 이름 공백/줄바꿈 구분 지원) ──
+  const addPayer = async (input: string) => {
+    const names = input.split(/[\s,]+/).map((n) => n.trim()).filter(Boolean)
+    const newOnes = names.filter((n) => !data.payers.some((p) => p.name === n))
+    if (newOnes.length === 0) return
     setIsAddingPayer(true)
     try {
-      await update({ payers: [...data.payers, { name, paid: false }] })
+      await update({ payers: [...data.payers, ...newOnes.map((name) => ({ name, paid: false }))] })
       setNewPayerName('')
     } finally {
       setIsAddingPayer(false)
@@ -367,7 +369,7 @@ export default function ExpenseWidget({
             onKeyDown={(e) => {
               if (e.key === 'Enter') addPayer(newPayerName)
             }}
-            placeholder="이름 입력 후 Enter..."
+            placeholder="이름 입력 (여러 명은 띄어쓰기로 구분)"
             disabled={isAddingPayer}
             className="flex-1 text-sm text-gray-700 placeholder-gray-300 bg-transparent focus:outline-none disabled:opacity-50"
             maxLength={20}

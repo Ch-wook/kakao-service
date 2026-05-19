@@ -56,12 +56,22 @@ export default function MemberWidget({
   }
 
   const handleAddMember = async (groupId: string) => {
-    const name = newMemberName.trim()
-    if (!name) return
+    const names = newMemberName.split(/[\s,]+/).map((n) => n.trim()).filter(Boolean)
+    if (names.length === 0) return
+    const group = groups.find((g) => g.id === groupId)
+    const existing = group?.members.map((m) => m.name) ?? []
+    const newOnes = names.filter((n) => !existing.includes(n))
+    if (newOnes.length === 0) return
     const updatedGroups = groups.map((g) =>
       g.id !== groupId
         ? g
-        : { ...g, members: [...g.members, { id: generateId(), name, status: 'unknown' as MemberStatus }] }
+        : {
+            ...g,
+            members: [
+              ...g.members,
+              ...newOnes.map((name) => ({ id: generateId(), name, status: 'unknown' as MemberStatus })),
+            ],
+          }
     )
     await onUpdateData(widget.id, { groups: updatedGroups })
     setNewMemberName('')
@@ -261,7 +271,7 @@ export default function MemberWidget({
                             setNewMemberName('')
                           }
                         }}
-                        placeholder="이름 입력"
+                        placeholder="이름 입력 (여러 명은 띄어쓰기로 구분)"
                         autoFocus
                         className="flex-1 text-sm px-3 py-2 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50"
                       />
