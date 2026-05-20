@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { generateId, getCurrentTimestamp } from '@/lib/utils'
-import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, ScheduleData, MemoData, TabConfig, TabConfigData } from '@/types'
+import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, ScheduleData, MemoData, NoticeData, TabConfig, TabConfigData } from '@/types'
 
 const asChecklist = (data: Record<string, unknown>): ChecklistData =>
   data as unknown as ChecklistData
@@ -45,6 +45,12 @@ const asMemo = (data: Record<string, unknown>): MemoData =>
   data as unknown as MemoData
 
 const fromMemo = (data: MemoData): Record<string, unknown> =>
+  data as unknown as Record<string, unknown>
+
+const asNotice = (data: Record<string, unknown>): NoticeData =>
+  data as unknown as NoticeData
+
+const fromNotice = (data: NoticeData): Record<string, unknown> =>
   data as unknown as Record<string, unknown>
 
 
@@ -166,6 +172,7 @@ export const useWidgets = (roomId: string) => {
           fee: { defaultAmount: 0, entries: [] },
           schedule: { items: [] },
           memo: { content: '' },
+          notice: { content: '' },
         }
         const defaultData = defaultDataMap[type] ?? {}
 
@@ -790,6 +797,60 @@ export const useWidgets = (roomId: string) => {
   )
 
   // ─────────────────────────────────────────────
+  // 공지: 생성 또는 업데이트 (방당 1개)
+  // ─────────────────────────────────────────────
+  const upsertNotice = useCallback(
+    async (newData: NoticeData): Promise<boolean> => {
+      const existing = widgets.find((w) => w.type === 'notice')
+
+      if (existing) {
+        const currentData = asNotice(existing.data)
+        optimisticUpdates.current.add(existing.id)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === existing.id ? { ...w, data: fromNotice(newData) } : w))
+        )
+        try {
+          const { error: err } = await supabase
+            .from('widgets')
+            .update({ data: newData, updated_at: getCurrentTimestamp() })
+            .eq('id', existing.id)
+          if (err) throw err
+          return true
+        } catch (err) {
+          console.error('Error updating notice:', err)
+          setWidgets((prev) =>
+            prev.map((w) => (w.id === existing.id ? { ...w, data: fromNotice(currentData) } : w))
+          )
+          return false
+        } finally {
+          optimisticUpdates.current.delete(existing.id)
+        }
+      } else {
+        // 새로 생성
+        const maxOrder = widgets.length > 0 ? Math.max(...widgets.map((w) => w.order)) : -1
+        const { data, error: err } = await supabase
+          .from('widgets')
+          .insert({
+            room_id: roomId,
+            type: 'notice',
+            title: '__notice__',
+            data: newData as unknown as Record<string, unknown>,
+            order: maxOrder + 1,
+          })
+          .select()
+          .single()
+        if (err) { console.error(err); return false }
+        setWidgets((prev) => {
+          if (prev.some((w) => w.id === (data as Widget).id)) return prev
+          return [...prev, data as Widget].sort((a, b) => a.order - b.order)
+        })
+        return true
+      }
+    },
+    [roomId, widgets]
+  )
+
+  // ─────────────────────────────────────────────
   // 탭: 파생 상태
   // ─────────────────────────────────────────────
   const tabConfigWidget = widgets.find((w) => w.type === 'tab-config')
@@ -933,5 +994,6 @@ export const useWidgets = (roomId: string) => {
     toggleFeeEntry,
     updateScheduleData,
     updateMemoData,
+    upsertNotice,
   }
 }

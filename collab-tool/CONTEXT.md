@@ -34,6 +34,7 @@
 | 11단계 | 멤버 관리 위젯 UX 개선 (메모 제거, 행 높이 축소, 뱃지 소형화) | ✅ |
 | 12단계 | 위젯 탭 분류 시스템 (커스텀 탭 추가·삭제, 위젯 자동 배속, 전체/장부 탭 유지) | ✅ |
 | 13단계 | 일정 탭 추가 (달력 뷰, 일정 CRUD, 색상 구분, 시간·장소·메모 입력) | ✅ |
+| 14단계 | 공지 배너 (탭 바 아래 고정, 공지 등록·수정·삭제·펼치기·숨기기) | ✅ |
 | 배포 | Vercel 배포 완료 | ✅ |
 
 ---
@@ -113,7 +114,7 @@ kakao-service/
 ALTER TABLE widgets ADD COLUMN IF NOT EXISTS tab_id TEXT;
 ALTER TABLE widgets DROP CONSTRAINT IF EXISTS widgets_type_check;
 ALTER TABLE widgets ADD CONSTRAINT widgets_type_check
-  CHECK (type IN ('checklist','expense','member','vote','memo','schedule','roles','poll','ledger','fee','tab-config'));
+  CHECK (type IN ('checklist','expense','member','vote','memo','schedule','roles','poll','ledger','fee','tab-config','notice'));
 ```
 
 ---
@@ -138,10 +139,10 @@ CREATE POLICY "누구나 참여자 조회 가능" ON participants FOR SELECT USI
 CREATE POLICY "누구나 참여 가능" ON participants FOR INSERT WITH CHECK (true);
 CREATE POLICY "last_active 업데이트 가능" ON participants FOR UPDATE USING (true);
 
--- 위젯 타입 constraint 업데이트 (ledger 포함)
+-- 위젯 타입 constraint 업데이트 (최신)
 ALTER TABLE widgets DROP CONSTRAINT IF EXISTS widgets_type_check;
 ALTER TABLE widgets ADD CONSTRAINT widgets_type_check
-  CHECK (type IN ('checklist','expense','member','vote','memo','schedule','roles','poll','ledger'));
+  CHECK (type IN ('checklist','expense','member','vote','memo','schedule','roles','poll','ledger','fee','tab-config','notice'));
 
 -- Realtime
 ALTER PUBLICATION supabase_realtime ADD TABLE widgets;

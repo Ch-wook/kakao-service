@@ -1,5 +1,31 @@
 # RENAME.md — 변경 이력 요약
 
+## 2026-05-20 (4차)
+
+### feat: 카카오톡 공지창 스타일 공지 배너 추가 (14단계)
+
+**변경 파일**:
+- `collab-tool/types/index.ts` — `NoticeData` 타입, Widget type에 `'notice'` 추가
+- `collab-tool/components/NoticeBanner.tsx` — 신규 생성 (공지 배너 + 공지 등록 바)
+- `collab-tool/hooks/useWidgets.ts` — `upsertNotice` 함수 추가 (없으면 생성, 있으면 업데이트)
+- `collab-tool/app/room/[id]/page.tsx` — 탭 바 아래에 NoticeBanner/NoticeAddBar 삽입
+
+**DB 변경 (1회 실행 필요)**:
+```sql
+ALTER TABLE widgets DROP CONSTRAINT IF EXISTS widgets_type_check;
+ALTER TABLE widgets ADD CONSTRAINT widgets_type_check
+  CHECK (type IN ('checklist','expense','member','vote','memo','schedule','roles','poll','ledger','fee','tab-config','notice'));
+```
+
+**동작**:
+- 공지 없을 때: 탭 바 아래 "공지 등록하기" 바 표시 → 탭 → 인라인 에디터로 등록
+- 공지 있을 때: 노란 배너에 내용 한 줄 표시 (카카오톡 공지 스타일)
+- 배너 탭 → 전체 내용 펼치기 / 작성자·시간 표시
+- ✏️ 수정, 🗑️ 삭제, ✕ 세션 중 숨기기 지원
+- notice 위젯은 탭 필터에서 제외 (전역 공지)
+
+---
+
 ## 2026-05-20 (3차)
 
 ### feat: 일정 탭 및 달력 위젯 추가 (13단계)

@@ -13,6 +13,7 @@ import LedgerWidget from '@/components/Widgets/LedgerWidget'
 import FeeWidget from '@/components/Widgets/FeeWidget'
 import ScheduleWidget from '@/components/Widgets/ScheduleWidget'
 import MemoWidget from '@/components/Widgets/MemoWidget'
+import NoticeBanner, { NoticeAddBar } from '@/components/NoticeBanner'
 import AddWidgetDrawer from '@/components/Widgets/AddWidgetDrawer'
 import { Share2, Users, Plus, ArrowLeft, BookOpen, CalendarDays, X } from 'lucide-react'
 import { generateShareUrl } from '@/lib/utils'
@@ -69,12 +70,15 @@ export default function RoomPage() {
     toggleFeeEntry,
     updateScheduleData,
     updateMemoData,
+    upsertNotice,
   } = useWidgets(roomId)
 
-  // 장부·일정·탭설정 위젯 제외한 일반 위젯
+  // 장부·일정·공지·탭설정 위젯 제외한 일반 위젯
   const ledgerWidget = widgets.find((w) => w.type === 'ledger')
   const scheduleWidget = widgets.find((w) => w.type === 'schedule')
-  const displayWidgets = widgets.filter((w) => w.type !== 'ledger' && w.type !== 'schedule' && w.type !== 'tab-config')
+  const noticeWidget = widgets.find((w) => w.type === 'notice')
+  const noticeData = noticeWidget?.data as { content?: string; updated_at?: string; updated_by?: string } | undefined
+  const displayWidgets = widgets.filter((w) => w.type !== 'ledger' && w.type !== 'schedule' && w.type !== 'tab-config' && w.type !== 'notice')
   const filteredWidgets = activeCustomTab === null
     ? displayWidgets
     : displayWidgets.filter((w) => w.tab_id === activeCustomTab)
@@ -434,6 +438,23 @@ export default function RoomPage() {
           장부
         </button>
       </div>
+
+      {/* ── 공지 배너 (탭 바 바로 아래 고정) ── */}
+      {noticeData?.content ? (
+        <NoticeBanner
+          content={noticeData.content}
+          updatedBy={noticeData.updated_by}
+          updatedAt={noticeData.updated_at}
+          nickname={session.nickname ?? undefined}
+          onSave={upsertNotice}
+          onDelete={async () => noticeWidget ? deleteWidget(noticeWidget.id) : false}
+        />
+      ) : (
+        <NoticeAddBar
+          nickname={session.nickname ?? undefined}
+          onAdd={upsertNotice}
+        />
+      )}
 
       {/* ── 위젯 탭 ── */}
       {activeSection === 'widgets' && (

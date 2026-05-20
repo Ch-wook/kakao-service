@@ -23,10 +23,16 @@ export interface TabConfigData {
   tabs: TabConfig[]
 }
 
+export interface NoticeData {
+  content: string
+  updated_at?: string
+  updated_by?: string
+}
+
 export interface Widget {
   id: string
   room_id: string
-  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll' | 'member' | 'ledger' | 'fee' | 'tab-config'
+  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll' | 'member' | 'ledger' | 'fee' | 'tab-config' | 'notice'
   title?: string
   data: Record<string, unknown>
   order: number
