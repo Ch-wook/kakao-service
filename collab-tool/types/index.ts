@@ -123,13 +123,13 @@ export interface LedgerEntry {
   id: string
   date: string               // YYYY-MM-DD
   type: LedgerEntryType      // 수입 / 지출
-  category: string           // 계정과목
-  description: string        // 적요
+  category: string           // 항목
+  description: string        // 상세내역
   amount: number             // 금액 (항상 양수)
-  taxType: TaxType           // 과세구분
-  paymentMethod: PaymentMethod // 결제수단
-  voucherType: VoucherType   // 증빙서류
-  memo: string               // 비고
+  taxType?: TaxType          // 과세구분 (구버전 호환용, 신규 입력 시 미사용)
+  paymentMethod?: PaymentMethod // 결제수단
+  voucherType?: VoucherType  // 증빙서류
+  memo?: string              // 비고
   created_at: string
 }
 

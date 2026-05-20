@@ -4,23 +4,14 @@ import { useState, useMemo, useCallback } from 'react'
 import {
   BookOpen, Plus, Trash2, Download, Settings2, X, Edit2, ChevronDown, ChevronUp,
 } from 'lucide-react'
-import * as XLSX from 'xlsx'
+import XLSX from 'xlsx-js-style'
 import type {
   Widget, LedgerData, LedgerEntry, LedgerEntryType, TaxType, PaymentMethod, VoucherType,
 } from '@/types'
 import { generateId, getCurrentTimestamp } from '@/lib/utils'
 
-// ── 계정과목 목록 ─────────────────────────────────────────
-const INCOME_CATEGORIES = [
-  '매출액', '이자수입', '임대수입', '배당수입', '잡수익', '기타수입',
-]
-const EXPENSE_CATEGORIES = [
-  '급여/인건비', '4대보험료', '복리후생비', '교통비/여비', '통신비',
-  '임차료', '소모품비', '광고선전비', '접대비', '수수료',
-  '세금과공과', '보험료', '수도광열비', '수선비', '감가상각비',
-  '지급이자', '잡비', '기타지출',
-]
-const TAX_TYPES: TaxType[] = ['과세', '면세', '비과세', '영세율']
+// ── 항목 목록 ─────────────────────────────────────────────
+const CATEGORIES = ['회비', '식대', '지원금', '물품구매', '기타']
 const PAYMENT_METHODS: PaymentMethod[] = ['현금', '카드', '계좌이체', '어음', '기타']
 const VOUCHER_TYPES: VoucherType[] = ['세금계산서', '계산서', '영수증', '카드매출전표', '없음']
 
@@ -35,10 +26,10 @@ interface LedgerWidgetProps {
 interface EntryForm {
   date: string
   type: LedgerEntryType
-  category: string
+  categorySelect: string  // 드롭다운 선택값
+  category: string        // 실제 저장값 (기타 직접입력 시 커스텀 텍스트)
   description: string
   amount: string
-  taxType: TaxType
   paymentMethod: PaymentMethod
   voucherType: VoucherType
   memo: string
@@ -47,10 +38,10 @@ interface EntryForm {
 const makeDefaultForm = (): EntryForm => ({
   date: new Date().toISOString().split('T')[0],
   type: 'income',
+  categorySelect: '',
   category: '',
   description: '',
   amount: '',
-  taxType: '과세',
   paymentMethod: '계좌이체',
   voucherType: '없음',
   memo: '',
@@ -124,7 +115,7 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
         updatedEntries = data.entries.map((e) =>
           e.id === editingId
             ? { ...e, date: form.date, type: form.type, category: form.category,
-                description: form.description, amount, taxType: form.taxType,
+                description: form.description, amount,
                 paymentMethod: form.paymentMethod, voucherType: form.voucherType,
                 memo: form.memo }
             : e
@@ -137,7 +128,6 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
           category: form.category,
           description: form.description,
           amount,
-          taxType: form.taxType,
           paymentMethod: form.paymentMethod,
           voucherType: form.voucherType,
           memo: form.memo,
@@ -157,10 +147,13 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
   }
 
   const openEdit = (entry: LedgerEntry) => {
+    const isKnown = CATEGORIES.filter((c) => c !== '기타').includes(entry.category)
     setForm({
-      date: entry.date, type: entry.type, category: entry.category,
+      date: entry.date, type: entry.type,
+      categorySelect: isKnown ? entry.category : '기타',
+      category: entry.category,
       description: entry.description, amount: String(entry.amount),
-      taxType: entry.taxType ?? '과세', paymentMethod: entry.paymentMethod ?? '현금',
+      paymentMethod: entry.paymentMethod ?? '현금',
       voucherType: entry.voucherType ?? '없음', memo: entry.memo ?? '',
     })
     setEditingId(entry.id)
@@ -188,74 +181,240 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
   // ── 엑셀 내보내기 ─────────────────────────────────────────
   const handleExportExcel = () => {
     const wb = XLSX.utils.book_new()
-    const rows: (string | number)[][] = []
 
-    // ① 제목 / 회사 정보
-    rows.push(['현금출납장'])
-    rows.push([
-      `상호: ${data.companyName || '(미입력)'}`, '', '',
-      `사업자번호: ${data.businessNumber || '(미입력)'}`, '', '',
-      `회계연도: ${data.fiscalYear}`, '', '',
-      `작성일: ${new Date().toLocaleDateString('ko-KR')}`, '', '',
-    ])
-    rows.push(['(단위: 원)'])
-    rows.push([])
+    // ── 스타일 정의 ──────────────────────────────────────────
+    const borderThin = {
+      top:    { style: 'thin', color: { rgb: '999999' } },
+      bottom: { style: 'thin', color: { rgb: '999999' } },
+      left:   { style: 'thin', color: { rgb: '999999' } },
+      right:  { style: 'thin', color: { rgb: '999999' } },
+    }
+    const borderMedium = {
+      top:    { style: 'medium', color: { rgb: '444444' } },
+      bottom: { style: 'medium', color: { rgb: '444444' } },
+      left:   { style: 'medium', color: { rgb: '444444' } },
+      right:  { style: 'medium', color: { rgb: '444444' } },
+    }
 
-    // ② 컬럼 헤더
-    rows.push([
-      'No.', '날짜', '구분', '계정과목', '적요',
-      '과세구분', '결제수단', '증빙서류',
-      '수입금액(+)', '지출금액(-)', '잔액', '비고',
-    ])
+    const sTitle = {
+      font:      { name: '맑은 고딕', sz: 16, bold: true, color: { rgb: '1A1A2E' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      fill:      { fgColor: { rgb: 'EDE9FE' } },
+      border:    borderMedium,
+    }
+    const sInfo = {
+      font:      { name: '맑은 고딕', sz: 10, color: { rgb: '374151' } },
+      alignment: { horizontal: 'left', vertical: 'center' },
+      fill:      { fgColor: { rgb: 'F5F3FF' } },
+      border:    { bottom: { style: 'thin', color: { rgb: 'C4B5FD' } } },
+    }
+    const sUnit = {
+      font:      { name: '맑은 고딕', sz: 9, color: { rgb: '6B7280' } },
+      alignment: { horizontal: 'right', vertical: 'center' },
+      fill:      { fgColor: { rgb: 'F5F3FF' } },
+    }
+    const sHeader = {
+      font:      { name: '맑은 고딕', sz: 10, bold: true, color: { rgb: 'FFFFFF' } },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      fill:      { fgColor: { rgb: '7C3AED' } },
+      border:    borderMedium,
+    }
+    const sOpeningLabel = {
+      font:      { name: '맑은 고딕', sz: 9, bold: true, color: { rgb: '4B5563' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      fill:      { fgColor: { rgb: 'EDE9FE' } },
+      border:    borderThin,
+    }
+    const sOpeningNum = {
+      font:      { name: '맑은 고딕', sz: 9, bold: true, color: { rgb: '4B5563' } },
+      alignment: { horizontal: 'right', vertical: 'center' },
+      fill:      { fgColor: { rgb: 'EDE9FE' } },
+      border:    borderThin,
+      numFmt:    '#,##0',
+    }
+    const sOpeningEmpty = {
+      fill:   { fgColor: { rgb: 'EDE9FE' } },
+      border: borderThin,
+    }
+    const sDataText = {
+      font:      { name: '맑은 고딕', sz: 9, color: { rgb: '111827' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border:    borderThin,
+    }
+    const sDataLeft = {
+      font:      { name: '맑은 고딕', sz: 9, color: { rgb: '111827' } },
+      alignment: { horizontal: 'left', vertical: 'center' },
+      border:    borderThin,
+    }
+    const sIncome = {
+      font:      { name: '맑은 고딕', sz: 9, bold: true, color: { rgb: '1D4ED8' } },
+      alignment: { horizontal: 'right', vertical: 'center' },
+      border:    borderThin,
+      numFmt:    '#,##0',
+    }
+    const sExpense = {
+      font:      { name: '맑은 고딕', sz: 9, bold: true, color: { rgb: 'DC2626' } },
+      alignment: { horizontal: 'right', vertical: 'center' },
+      border:    borderThin,
+      numFmt:    '#,##0',
+    }
+    const sBalance = {
+      font:      { name: '맑은 고딕', sz: 9, bold: true, color: { rgb: '111827' } },
+      alignment: { horizontal: 'right', vertical: 'center' },
+      border:    borderThin,
+      numFmt:    '#,##0',
+    }
+    const sEmpty = { border: borderThin }
+    const sTotalLabel = {
+      font:      { name: '맑은 고딕', sz: 10, bold: true, color: { rgb: '1A1A2E' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      fill:      { fgColor: { rgb: 'DDD6FE' } },
+      border:    borderMedium,
+    }
+    const sTotalIncome = {
+      font:      { name: '맑은 고딕', sz: 10, bold: true, color: { rgb: '1D4ED8' } },
+      alignment: { horizontal: 'right', vertical: 'center' },
+      fill:      { fgColor: { rgb: 'DBEAFE' } },
+      border:    borderMedium,
+      numFmt:    '#,##0',
+    }
+    const sTotalExpense = {
+      font:      { name: '맑은 고딕', sz: 10, bold: true, color: { rgb: 'DC2626' } },
+      alignment: { horizontal: 'right', vertical: 'center' },
+      fill:      { fgColor: { rgb: 'FEE2E2' } },
+      border:    borderMedium,
+      numFmt:    '#,##0',
+    }
+    const sTotalBalance = {
+      font:      { name: '맑은 고딕', sz: 10, bold: true, color: { rgb: '111827' } },
+      alignment: { horizontal: 'right', vertical: 'center' },
+      fill:      { fgColor: { rgb: 'DDD6FE' } },
+      border:    borderMedium,
+      numFmt:    '#,##0',
+    }
 
-    // ③ 기초잔액 행
-    rows.push(['', '', '기초', '전기이월', '', '', '', '',
-      data.openingBalance, '', data.openingBalance, ''])
-
-    // ④ 거래 행
-    entriesWithBalance.forEach((e, i) => {
-      rows.push([
-        i + 1,
-        e.date,
-        e.type === 'income' ? '수입' : '지출',
-        e.category,
-        e.description,
-        e.taxType,
-        e.paymentMethod,
-        e.voucherType,
-        e.type === 'income' ? e.amount : 0,
-        e.type === 'expense' ? e.amount : 0,
-        e.calculatedBalance,
-        e.memo,
-      ])
+    // ── 셀 생성 헬퍼 ──────────────────────────────────────────
+    type CellStyle = Record<string, unknown>
+    const c = (v: string | number, s: CellStyle, t?: string) => ({
+      v, s, t: t ?? (typeof v === 'number' ? 'n' : 's'),
     })
 
-    // ⑤ 합계 행
-    rows.push(['', '', '합계', '', '', '', '', '',
-      totalIncome, totalExpense, currentBalance, ''])
+    // ── 행 구성 ───────────────────────────────────────────────
+    const today = new Date().toLocaleDateString('ko-KR')
+    const COLS = 11 // A~K
 
-    const ws = XLSX.utils.aoa_to_sheet(rows)
+    // 행 0: 제목 (병합)
+    const rowTitle = [c('현금출납장', sTitle)]
+    for (let i = 1; i < COLS; i++) rowTitle.push(c('', sTitle))
 
-    // 셀 병합 (제목·단위 행)
+    // 행 1: 회사 정보 (셀 병합으로 3구역)
+    const rowInfo = [
+      c(`상호: ${data.companyName || '(미입력)'}`, sInfo),
+      c('', sInfo), c('', sInfo),
+      c(`사업자번호: ${data.businessNumber || '(미입력)'}`, sInfo),
+      c('', sInfo), c('', sInfo),
+      c(`회계연도: ${data.fiscalYear}`, sInfo),
+      c('', sInfo),
+      c(`작성일: ${today}`, sInfo),
+      c('', sInfo), c('', sInfo),
+    ]
+
+    // 행 2: 단위
+    const rowUnit = [c('(단위: 원)', sUnit)]
+    for (let i = 1; i < COLS; i++) rowUnit.push(c('', sUnit))
+
+    // 행 3: 헤더
+    const rowHeader = [
+      c('No.', sHeader), c('날짜', sHeader), c('구분', sHeader),
+      c('항목', sHeader), c('상세내역', sHeader),
+      c('결제수단', sHeader), c('증빙서류', sHeader),
+      c('수입금액(+)', sHeader), c('지출금액(-)', sHeader), c('잔액', sHeader), c('비고', sHeader),
+    ]
+
+    // 행 4: 기초잔액
+    const rowOpening = [
+      c('', sOpeningEmpty), c('', sOpeningEmpty),
+      c('기초', sOpeningLabel), c('전기이월', sOpeningLabel),
+      c('', sOpeningEmpty), c('', sOpeningEmpty), c('', sOpeningEmpty),
+      c(data.openingBalance, sOpeningNum),
+      c('', sOpeningEmpty),
+      c(data.openingBalance, sOpeningNum),
+      c('', sOpeningEmpty),
+    ]
+
+    // 거래 행
+    const dataRows = entriesWithBalance.map((e, i) => {
+      const isIncome = e.type === 'income'
+      const typeStyle = isIncome
+        ? { ...sDataText, font: { ...sDataText.font, color: { rgb: '1D4ED8' }, bold: true } }
+        : { ...sDataText, font: { ...sDataText.font, color: { rgb: 'DC2626' }, bold: true } }
+      return [
+        c(i + 1,       sDataText),
+        c(e.date,      sDataText),
+        c(isIncome ? '수입' : '지출', typeStyle),
+        c(e.category,  sDataText),
+        c(e.description, sDataLeft),
+        c(e.paymentMethod ?? '',  sDataText),
+        c(e.voucherType ?? '',    sDataText),
+        isIncome ? c(e.amount, sIncome)  : c('', sEmpty),
+        isIncome ? c('', sEmpty) : c(e.amount, sExpense),
+        c(e.calculatedBalance, sBalance),
+        c(e.memo ?? '', sDataLeft),
+      ]
+    })
+
+    // 합계 행
+    const rowTotal = [
+      c('', sTotalLabel), c('', sTotalLabel),
+      c('합계', sTotalLabel), c('', sTotalLabel),
+      c('', sTotalLabel), c('', sTotalLabel), c('', sTotalLabel),
+      c(totalIncome,   sTotalIncome),
+      c(totalExpense,  sTotalExpense),
+      c(currentBalance, sTotalBalance),
+      c('', sTotalLabel),
+    ]
+
+    const allRows = [rowTitle, rowInfo, rowUnit, rowHeader, rowOpening, ...dataRows, rowTotal]
+
+    const ws = XLSX.utils.aoa_to_sheet(allRows)
+
+    // 셀 병합
+    const lastDataRow = 4 + entriesWithBalance.length
     ws['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 11 } },
-      { s: { r: 2, c: 0 }, e: { r: 2, c: 11 } },
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 10 } },                // 제목
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 2 } },                 // 상호
+      { s: { r: 1, c: 3 }, e: { r: 1, c: 5 } },                 // 사업자번호
+      { s: { r: 1, c: 6 }, e: { r: 1, c: 7 } },                 // 회계연도
+      { s: { r: 1, c: 8 }, e: { r: 1, c: 10 } },                // 작성일
+      { s: { r: 2, c: 0 }, e: { r: 2, c: 10 } },                // 단위
+      { s: { r: lastDataRow + 1, c: 0 }, e: { r: lastDataRow + 1, c: 1 } }, // 합계 No.+날짜
+      { s: { r: lastDataRow + 1, c: 2 }, e: { r: lastDataRow + 1, c: 6 } }, // 합계 레이블
+    ]
+
+    // 행 높이
+    ws['!rows'] = [
+      { hpt: 30 },  // 제목
+      { hpt: 20 },  // 회사정보
+      { hpt: 16 },  // 단위
+      { hpt: 28 },  // 헤더
+      { hpt: 20 },  // 기초잔액
+      ...entriesWithBalance.map(() => ({ hpt: 18 })),
+      { hpt: 22 },  // 합계
     ]
 
     // 열 너비
     ws['!cols'] = [
-      { wch: 5 },  // No.
+      { wch: 5  }, // No.
       { wch: 12 }, // 날짜
-      { wch: 6 },  // 구분
-      { wch: 16 }, // 계정과목
-      { wch: 28 }, // 적요
-      { wch: 10 }, // 과세구분
+      { wch: 7  }, // 구분
+      { wch: 14 }, // 항목
+      { wch: 28 }, // 상세내역
       { wch: 10 }, // 결제수단
       { wch: 14 }, // 증빙서류
-      { wch: 16 }, // 수입금액
-      { wch: 16 }, // 지출금액
-      { wch: 16 }, // 잔액
-      { wch: 22 }, // 비고
+      { wch: 15 }, // 수입금액
+      { wch: 15 }, // 지출금액
+      { wch: 15 }, // 잔액
+      { wch: 20 }, // 비고
     ]
 
     XLSX.utils.book_append_sheet(wb, ws, '현금출납장')
@@ -388,9 +547,8 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
                 {expandedId === entry.id && (
                   <div className="px-4 pb-4 pt-1 bg-gray-50 border-t border-gray-100">
                     <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs mb-3">
-                      <Detail label="계정과목" value={entry.category} />
-                      <Detail label="적요" value={entry.description} />
-                      <Detail label="과세구분" value={entry.taxType ?? '-'} />
+                      <Detail label="항목" value={entry.category} />
+                      <Detail label="상세내역" value={entry.description} />
                       <Detail label="결제수단" value={entry.paymentMethod ?? '-'} />
                       <Detail label="증빙서류" value={entry.voucherType ?? '-'} />
                       <Detail
@@ -484,27 +642,45 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
                 />
               </FormField>
 
-              {/* 계정과목 */}
-              <FormField label="계정과목 *">
+              {/* 항목 */}
+              <FormField label="항목 *">
                 <select
-                  value={form.category}
-                  onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                  value={form.categorySelect}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setForm((f) => ({
+                      ...f,
+                      categorySelect: v,
+                      category: v === '기타' ? '' : v,
+                    }))
+                  }}
                   className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-violet-400"
                 >
                   <option value="">선택하세요</option>
-                  {(form.type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((c) => (
+                  {CATEGORIES.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
+                {form.categorySelect === '기타' && (
+                  <input
+                    type="text"
+                    value={form.category}
+                    onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                    placeholder="항목을 직접 입력하세요"
+                    maxLength={30}
+                    autoFocus
+                    className="mt-2 w-full px-3 py-2.5 border border-violet-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-400"
+                  />
+                )}
               </FormField>
 
-              {/* 적요 */}
-              <FormField label="적요 (상세내역) *">
+              {/* 상세내역 */}
+              <FormField label="상세내역 *">
                 <input
                   type="text"
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  placeholder="예: 1월 납품대금, 사무용품 구매"
+                  placeholder="예: 3월 정기 회비, 워크숍 식사"
                   maxLength={80}
                   className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-violet-400"
                 />
@@ -522,27 +698,16 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
                 />
               </FormField>
 
-              {/* 과세구분 / 결제수단 */}
-              <div className="grid grid-cols-2 gap-3">
-                <FormField label="과세구분">
-                  <select
-                    value={form.taxType}
-                    onChange={(e) => setForm((f) => ({ ...f, taxType: e.target.value as TaxType }))}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-violet-400"
-                  >
-                    {TAX_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </FormField>
-                <FormField label="결제수단">
-                  <select
-                    value={form.paymentMethod}
-                    onChange={(e) => setForm((f) => ({ ...f, paymentMethod: e.target.value as PaymentMethod }))}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-violet-400"
-                  >
-                    {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </FormField>
-              </div>
+              {/* 결제수단 */}
+              <FormField label="결제수단">
+                <select
+                  value={form.paymentMethod}
+                  onChange={(e) => setForm((f) => ({ ...f, paymentMethod: e.target.value as PaymentMethod }))}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                >
+                  {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </FormField>
 
               {/* 증빙서류 */}
               <FormField label="증빙서류">

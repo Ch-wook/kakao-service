@@ -30,6 +30,7 @@
 | 6단계 | 멤버 관리 위젯 (그룹별 인원·상태 관리, 이름 수정) | ✅ |
 | 7단계 | 관리자 페이지, 에러 바운더리, 방 생성 제한, 보안 강화 | ✅ |
 | 8단계 | 회계장부 위젯 (수입·지출 거래 기록, 엑셀 현금출납장 다운로드) | ✅ |
+| 10단계 | 회계장부 항목 단순화 (회비·식대·지원금·물품구매·기타 직접입력), 과세구분 제거, 엑셀 스타일링 | ✅ |
 | 배포 | Vercel 배포 완료 | ✅ |
 
 ---
@@ -154,13 +155,13 @@ ALTER PUBLICATION supabase_realtime ADD TABLE participants;
     id: string,
     date: string,           // YYYY-MM-DD
     type: 'income'|'expense',
-    category: string,       // 계정과목 (매출액, 급여/인건비 등 24종)
-    description: string,    // 적요
+    category: string,       // 항목 (회비|식대|지원금|물품구매|기타 직접입력)
+    description: string,    // 상세내역
     amount: number,
-    taxType: '과세'|'면세'|'비과세'|'영세율',
-    paymentMethod: '현금'|'카드'|'계좌이체'|'어음'|'기타',
-    voucherType: '세금계산서'|'계산서'|'영수증'|'카드매출전표'|'없음',
-    memo: string,
+    taxType?: '과세'|'면세'|'비과세'|'영세율',  // 구버전 호환용, 신규 미사용
+    paymentMethod?: '현금'|'카드'|'계좌이체'|'어음'|'기타',
+    voucherType?: '세금계산서'|'계산서'|'영수증'|'카드매출전표'|'없음',
+    memo?: string,
     created_at: string
   }],
   openingBalance: number,   // 기초잔액
