@@ -63,6 +63,7 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
 
   const [showModal, setShowModal] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [excelGuide, setExcelGuide] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [form, setForm] = useState<EntryForm>(makeDefaultForm())
@@ -420,14 +421,24 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
     XLSX.utils.book_append_sheet(wb, ws, '현금출납장')
 
     const fileName = `회계장부_${data.fiscalYear}_${data.companyName || '미입력'}.xlsx`
+    const ua = navigator.userAgent
+    const isKakao   = /KAKAOTALK/i.test(ua)
+    const isIOS     = /iPhone|iPad|iPod/i.test(ua)
+
+    // 카카오톡 인앱 브라우저: WebView는 파일 저장 불가 → 외부 브라우저 안내
+    if (isKakao) {
+      setExcelGuide(true)
+      return
+    }
+
     const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
     const blob = new Blob([wbout], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     })
     const url = URL.createObjectURL(blob)
 
-    // iOS는 download 속성을 무시하므로 새 탭으로 열어 저장 유도
-    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    if (isIOS) {
+      // iOS Safari: download 속성 미지원 → 새 탭으로 열어 파일 앱 저장 유도
       window.open(url, '_blank')
     } else {
       const a = document.createElement('a')
@@ -819,6 +830,35 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
                 저장
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 카카오톡 엑셀 저장 안내 모달 ─────────────────── */}
+      {excelGuide && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white w-full max-w-sm rounded-t-3xl sm:rounded-2xl px-6 pt-6 pb-8">
+            <div className="text-center mb-5">
+              <div className="w-14 h-14 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Download size={24} className="text-yellow-600" />
+              </div>
+              <h2 className="text-base font-bold text-gray-900">엑셀 저장 안내</h2>
+              <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                카카오톡 내 브라우저에서는<br />파일 저장이 제한됩니다.
+              </p>
+            </div>
+            <div className="bg-gray-50 rounded-2xl px-4 py-4 text-sm text-gray-700 space-y-2 mb-5">
+              <p className="font-semibold text-gray-800">외부 브라우저로 열기</p>
+              <p>① 화면 우측 하단 <span className="font-bold">⋮</span> 또는 우측 상단 메뉴 탭</p>
+              <p>② <span className="font-bold">"다른 앱으로 열기"</span> 또는 <span className="font-bold">"외부 브라우저로 열기"</span> 선택</p>
+              <p>③ Chrome / Safari 에서 엑셀 버튼 다시 누르기</p>
+            </div>
+            <button
+              onClick={() => setExcelGuide(false)}
+              className="w-full py-3.5 bg-violet-500 text-white rounded-2xl font-bold text-sm active:bg-violet-600 transition-colors"
+            >
+              확인
+            </button>
           </div>
         </div>
       )}
