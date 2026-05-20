@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { generateId, getCurrentTimestamp } from '@/lib/utils'
-import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, ScheduleData, TabConfig, TabConfigData } from '@/types'
+import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, ScheduleData, MemoData, TabConfig, TabConfigData } from '@/types'
 
 const asChecklist = (data: Record<string, unknown>): ChecklistData =>
   data as unknown as ChecklistData
@@ -39,6 +39,12 @@ const asSchedule = (data: Record<string, unknown>): ScheduleData =>
   data as unknown as ScheduleData
 
 const fromSchedule = (data: ScheduleData): Record<string, unknown> =>
+  data as unknown as Record<string, unknown>
+
+const asMemo = (data: Record<string, unknown>): MemoData =>
+  data as unknown as MemoData
+
+const fromMemo = (data: MemoData): Record<string, unknown> =>
   data as unknown as Record<string, unknown>
 
 
@@ -159,6 +165,7 @@ export const useWidgets = (roomId: string) => {
           },
           fee: { defaultAmount: 0, entries: [] },
           schedule: { items: [] },
+          memo: { content: '' },
         }
         const defaultData = defaultDataMap[type] ?? {}
 
@@ -709,6 +716,43 @@ export const useWidgets = (roomId: string) => {
   )
 
   // ─────────────────────────────────────────────
+  // 메모: 전체 데이터 업데이트
+  // ─────────────────────────────────────────────
+  const updateMemoData = useCallback(
+    async (widgetId: string, newData: MemoData): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'memo') return false
+
+      const currentData = asMemo(widget.data)
+
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) => (w.id === widgetId ? { ...w, data: fromMemo(newData) } : w))
+      )
+
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: newData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+
+        if (err) throw err
+        return true
+      } catch (err) {
+        console.error('Error updating memo data:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? { ...w, data: fromMemo(currentData) } : w))
+        )
+        setError('메모 데이터 업데이트 중 오류가 발생했습니다')
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [widgets]
+  )
+
+  // ─────────────────────────────────────────────
   // 일정: 전체 데이터 업데이트
   // ─────────────────────────────────────────────
   const updateScheduleData = useCallback(
@@ -888,5 +932,6 @@ export const useWidgets = (roomId: string) => {
     updateFeeData,
     toggleFeeEntry,
     updateScheduleData,
+    updateMemoData,
   }
 }

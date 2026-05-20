@@ -42,6 +42,12 @@ const WIDGET_OPTIONS: {
     description: '누가 어떤 항목을 얼마나 냈는지 관리하세요',
     emoji: '💳',
   },
+  {
+    type: 'memo',
+    label: '공유 메모',
+    description: '모두가 함께 편집하는 자유 메모장',
+    emoji: '📝',
+  },
 ]
 
 export default function AddWidgetDrawer({ isOpen, onClose, onAdd, error }: AddWidgetDrawerProps) {

@@ -106,6 +106,7 @@ export interface RoleData {
 export interface MemoData {
   content: string
   updated_at?: string
+  saved_by?: string
 }
 
 export type MemberStatus = 'unknown' | 'attending' | 'arrived' | 'preparing' | 'absent' | 'home'

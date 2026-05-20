@@ -12,6 +12,7 @@ import MemberWidget from '@/components/Widgets/MemberWidget'
 import LedgerWidget from '@/components/Widgets/LedgerWidget'
 import FeeWidget from '@/components/Widgets/FeeWidget'
 import ScheduleWidget from '@/components/Widgets/ScheduleWidget'
+import MemoWidget from '@/components/Widgets/MemoWidget'
 import AddWidgetDrawer from '@/components/Widgets/AddWidgetDrawer'
 import { Share2, Users, Plus, ArrowLeft, BookOpen, CalendarDays, X } from 'lucide-react'
 import { generateShareUrl } from '@/lib/utils'
@@ -67,6 +68,7 @@ export default function RoomPage() {
     updateFeeData,
     toggleFeeEntry,
     updateScheduleData,
+    updateMemoData,
   } = useWidgets(roomId)
 
   // 장부·일정·탭설정 위젯 제외한 일반 위젯
@@ -527,6 +529,17 @@ export default function RoomPage() {
                         participants={participants.map((p) => p.nickname)}
                         onUpdateData={updateFeeData}
                         onToggleEntry={toggleFeeEntry}
+                        onDeleteWidget={deleteWidget}
+                      />
+                    )
+                  }
+                  if (widget.type === 'memo') {
+                    return (
+                      <MemoWidget
+                        key={widget.id}
+                        widget={widget}
+                        nickname={session.nickname ?? undefined}
+                        onUpdateData={updateMemoData}
                         onDeleteWidget={deleteWidget}
                       />
                     )
