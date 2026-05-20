@@ -418,7 +418,27 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
     ]
 
     XLSX.utils.book_append_sheet(wb, ws, '현금출납장')
-    XLSX.writeFile(wb, `회계장부_${data.fiscalYear}_${data.companyName || '미입력'}.xlsx`)
+
+    const fileName = `회계장부_${data.fiscalYear}_${data.companyName || '미입력'}.xlsx`
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([wbout], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    const url = URL.createObjectURL(blob)
+
+    // iOS는 download 속성을 무시하므로 새 탭으로 열어 저장 유도
+    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      window.open(url, '_blank')
+    } else {
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    }
+
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
   }
 
   // ── 렌더링 ────────────────────────────────────────────────
