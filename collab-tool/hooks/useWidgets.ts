@@ -35,6 +35,7 @@ const asFee = (data: Record<string, unknown>): FeeData =>
 const fromFee = (data: FeeData): Record<string, unknown> =>
   data as unknown as Record<string, unknown>
 
+
 export const useWidgets = (roomId: string) => {
   const [widgets, setWidgets] = useState<Widget[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -143,7 +144,13 @@ export const useWidgets = (roomId: string) => {
           checklist: { items: [] },
           expense: { totalAmount: 0, description: '', payers: [] },
           member: { groups: [{ id: generateId(), name: '참석 현황', targetCount: 0, members: [] }] },
-          ledger: { entries: [] },
+          ledger: {
+            entries: [],
+            openingBalance: 0,
+            companyName: '',
+            businessNumber: '',
+            fiscalYear: new Date().getFullYear().toString(),
+          },
           fee: { defaultAmount: 0, entries: [] },
         }
         const defaultData = defaultDataMap[type] ?? {}
@@ -580,7 +587,7 @@ export const useWidgets = (roomId: string) => {
   )
 
   // ─────────────────────────────────────────────
-  // 회계 장부: 전체 데이터 업데이트
+  // 회계장부: 전체 데이터 업데이트
   // ─────────────────────────────────────────────
   const updateLedgerData = useCallback(
     async (widgetId: string, newData: LedgerData): Promise<boolean> => {
@@ -607,7 +614,7 @@ export const useWidgets = (roomId: string) => {
         setWidgets((prev) =>
           prev.map((w) => (w.id === widgetId ? { ...w, data: fromLedger(currentData) } : w))
         )
-        setError('장부 데이터 업데이트 중 오류가 발생했습니다')
+        setError('회계장부 데이터 업데이트 중 오류가 발생했습니다')
         return false
       } finally {
         optimisticUpdates.current.delete(widgetId)

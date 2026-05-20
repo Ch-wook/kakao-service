@@ -112,20 +112,36 @@ export interface MemberData {
   groups: MemberGroup[]
 }
 
-export type LedgerEntryType = 'expense' | 'income'
+// ── 회계장부 ──────────────────────────────────────────────
+
+export type LedgerEntryType = 'income' | 'expense'
+export type TaxType = '과세' | '면세' | '비과세' | '영세율'
+export type PaymentMethod = '현금' | '카드' | '계좌이체' | '어음' | '기타'
+export type VoucherType = '세금계산서' | '계산서' | '영수증' | '카드매출전표' | '없음'
 
 export interface LedgerEntry {
   id: string
-  date: string
-  category: string
-  description: string
-  amount: number
-  type: LedgerEntryType
+  date: string               // YYYY-MM-DD
+  type: LedgerEntryType      // 수입 / 지출
+  category: string           // 계정과목
+  description: string        // 적요
+  amount: number             // 금액 (항상 양수)
+  taxType: TaxType           // 과세구분
+  paymentMethod: PaymentMethod // 결제수단
+  voucherType: VoucherType   // 증빙서류
+  memo: string               // 비고
+  created_at: string
 }
 
 export interface LedgerData {
   entries: LedgerEntry[]
+  openingBalance: number     // 기초잔액
+  companyName: string        // 상호/회사명
+  businessNumber: string     // 사업자등록번호
+  fiscalYear: string         // 회계연도
 }
+
+// ── 납부 체크 ─────────────────────────────────────────────
 
 export interface FeeEntry {
   id: string

@@ -43,6 +43,7 @@ Collab은 이 마찰을 **0**으로 만듭니다.
 | ✅ 체크리스트 | 항목 추가·수정·삭제·체크, 진행률 바, 담당자 표시 |
 | 💰 정산 (N빵) | 총액 입력 → 1인당 자동 계산 → 납부 토글 |
 | 👥 멤버 관리 | 그룹별 멤버 추가·이름 수정, 상태 탭으로 출석 현황 실시간 관리 |
+| 📒 회계장부 | 수입·지출 거래 기록, 잔액 자동 계산, 엑셀(현금출납장) 다운로드 |
 
 **멤버 관리 위젯 상태 사이클**  
 `미확인` → `참석` → `도착` → `준비중` → `불참` → `가정` → `미확인`
@@ -77,6 +78,7 @@ Collab은 이 마찰을 **0**으로 만듭니다.
 | Backend / DB | Supabase (PostgreSQL + Realtime) |
 | 인증 | Supabase Anonymous Auth |
 | UI | lucide-react, vaul (Bottom Sheet), class-variance-authority |
+| 엑셀 내보내기 | SheetJS (xlsx) |
 | 배포 | Vercel (Serverless, 무중단) |
 
 ---
@@ -176,6 +178,7 @@ kakao-service/
     │       ├── ChecklistWidget.tsx
     │       ├── ExpenseWidget.tsx
     │       ├── MemberWidget.tsx      # 멤버 관리 (이름 인라인 수정 포함)
+    │       ├── LedgerWidget.tsx      # 회계장부 (엑셀 내보내기 포함)
     │       └── AddWidgetDrawer.tsx
     ├── hooks/
     │   ├── useAuth.ts
@@ -224,10 +227,10 @@ CREATE POLICY "누구나 참여자 조회 가능" ON participants FOR SELECT USI
 CREATE POLICY "누구나 참여 가능" ON participants FOR INSERT WITH CHECK (true);
 CREATE POLICY "last_active 업데이트 가능" ON participants FOR UPDATE USING (true);
 
--- 2. member 위젯 타입 추가
-ALTER TABLE widgets DROP CONSTRAINT widgets_type_check;
+-- 2. 위젯 타입 constraint 업데이트 (ledger 추가)
+ALTER TABLE widgets DROP CONSTRAINT IF EXISTS widgets_type_check;
 ALTER TABLE widgets ADD CONSTRAINT widgets_type_check
-  CHECK (type IN ('checklist','expense','member','vote','memo','schedule','roles','poll'));
+  CHECK (type IN ('checklist','expense','member','vote','memo','schedule','roles','poll','ledger'));
 
 -- 3. Realtime 활성화
 ALTER PUBLICATION supabase_realtime ADD TABLE widgets;
@@ -260,4 +263,5 @@ npm run dev   # http://localhost:3000
 | 5단계 | 정산(N빵) 위젯, 전체 버그 수정, API 안정화 |
 | 6단계 | 멤버 관리 위젯 — 그룹별 인원·상태 실시간 관리, 이름 인라인 수정 |
 | 7단계 | 관리자 페이지, 에러 바운더리, 방 생성 제한, 보안 강화 |
+| 8단계 | 회계장부 위젯 — 수입·지출 거래 기록, 계정과목·과세구분·결제수단·증빙서류, 현금출납장 엑셀 다운로드 |
 | 배포 | Vercel 배포, PWA manifest, Node.js 20.x, 환경변수 설정 |
