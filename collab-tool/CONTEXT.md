@@ -32,6 +32,7 @@
 | 8단계 | 회계장부 위젯 (수입·지출 거래 기록, 엑셀 현금출납장 다운로드) | ✅ |
 | 10단계 | 회계장부 항목 단순화 (회비·식대·지원금·물품구매·기타 직접입력), 과세구분 제거, 엑셀 스타일링 | ✅ |
 | 11단계 | 멤버 관리 위젯 UX 개선 (메모 제거, 행 높이 축소, 뱃지 소형화) | ✅ |
+| 12단계 | 위젯 탭 분류 시스템 (커스텀 탭 추가·삭제, 위젯 자동 배속, 전체/장부 탭 유지) | ✅ |
 | 배포 | Vercel 배포 완료 | ✅ |
 
 ---
@@ -94,6 +95,24 @@ kakao-service/
 | `SUPABASE_SERVICE_ROLE_KEY` | 관리자 삭제용 (서버 전용, NEXT_PUBLIC 붙이면 안됨) |
 | `ADMIN_PASSWORD` | 관리자 페이지 비밀번호 |
 | `MAX_ROOMS` | 최대 방 개수 (기본값: 300) |
+
+---
+
+## 탭 시스템 (12단계)
+
+- `widgets` 테이블에 `tab_id TEXT` 컬럼 추가 (어느 탭에 속하는지)
+- `widgets` type constraint에 `tab-config` 추가
+- `tab-config` 타입 위젯: `{ tabs: [{ id, name }] }` — 방 단위로 1개 존재, 탭 목록 저장
+- 위젯 추가 시 현재 탭 자동 배속, 탭 삭제 시 해당 위젯들 tab_id 초기화
+- 탭 바: [전체] [커스텀탭...] [+] — [장부]
+
+### SQL (최초 1회 실행 필요)
+```sql
+ALTER TABLE widgets ADD COLUMN IF NOT EXISTS tab_id TEXT;
+ALTER TABLE widgets DROP CONSTRAINT IF EXISTS widgets_type_check;
+ALTER TABLE widgets ADD CONSTRAINT widgets_type_check
+  CHECK (type IN ('checklist','expense','member','vote','memo','schedule','roles','poll','ledger','fee','tab-config'));
+```
 
 ---
 

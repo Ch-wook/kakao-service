@@ -14,13 +14,23 @@ export interface Participant {
   color?: string
 }
 
+export interface TabConfig {
+  id: string
+  name: string
+}
+
+export interface TabConfigData {
+  tabs: TabConfig[]
+}
+
 export interface Widget {
   id: string
   room_id: string
-  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll' | 'member' | 'ledger' | 'fee'
+  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll' | 'member' | 'ledger' | 'fee' | 'tab-config'
   title?: string
   data: Record<string, unknown>
   order: number
+  tab_id?: string | null
   created_at?: string
   updated_at?: string
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { generateId, getCurrentTimestamp } from '@/lib/utils'
-import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData } from '@/types'
+import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, TabConfig, TabConfigData } from '@/types'
 
 const asChecklist = (data: Record<string, unknown>): ChecklistData =>
   data as unknown as ChecklistData
@@ -701,11 +701,135 @@ export const useWidgets = (roomId: string) => {
     [widgets]
   )
 
+  // ─────────────────────────────────────────────
+  // 탭: 파생 상태
+  // ─────────────────────────────────────────────
+  const tabConfigWidget = widgets.find((w) => w.type === 'tab-config')
+  const tabs: TabConfig[] = (tabConfigWidget?.data?.tabs as TabConfig[]) ?? []
+
+  // ─────────────────────────────────────────────
+  // 탭: 새 탭 생성
+  // ─────────────────────────────────────────────
+  const createTab = useCallback(
+    async (name: string): Promise<TabConfig | null> => {
+      const newTab: TabConfig = { id: generateId(), name }
+      const existing = widgets.find((w) => w.type === 'tab-config')
+
+      if (!existing) {
+        const maxOrder = widgets.length > 0 ? Math.max(...widgets.map((w) => w.order)) : -1
+        const { data, error: err } = await supabase
+          .from('widgets')
+          .insert({
+            room_id: roomId,
+            type: 'tab-config',
+            title: '__tab_config__',
+            data: { tabs: [newTab] } as unknown as Record<string, unknown>,
+            order: maxOrder + 1,
+          })
+          .select()
+          .single()
+        if (err) { console.error(err); return null }
+        setWidgets((prev) => {
+          if (prev.some((w) => w.id === (data as Widget).id)) return prev
+          return [...prev, data as Widget].sort((a, b) => a.order - b.order)
+        })
+      } else {
+        const currentTabs = (existing.data?.tabs as TabConfig[]) ?? []
+        const newData: TabConfigData = { tabs: [...currentTabs, newTab] }
+        optimisticUpdates.current.add(existing.id)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === existing.id ? { ...w, data: newData as unknown as Record<string, unknown> } : w))
+        )
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: newData, updated_at: getCurrentTimestamp() })
+          .eq('id', existing.id)
+        optimisticUpdates.current.delete(existing.id)
+        if (err) { console.error(err); await fetchWidgets(); return null }
+      }
+      return newTab
+    },
+    [roomId, widgets, fetchWidgets]
+  )
+
+  // ─────────────────────────────────────────────
+  // 탭: 탭 삭제 (해당 탭의 위젯들 tab_id 초기화)
+  // ─────────────────────────────────────────────
+  const deleteTab = useCallback(
+    async (tabId: string): Promise<boolean> => {
+      const existing = widgets.find((w) => w.type === 'tab-config')
+      if (!existing) return false
+
+      const currentTabs = (existing.data?.tabs as TabConfig[]) ?? []
+      const newData: TabConfigData = { tabs: currentTabs.filter((t) => t.id !== tabId) }
+
+      optimisticUpdates.current.add(existing.id)
+      setWidgets((prev) =>
+        prev.map((w) => {
+          if (w.id === existing.id) return { ...w, data: newData as unknown as Record<string, unknown> }
+          if (w.tab_id === tabId) return { ...w, tab_id: null }
+          return w
+        })
+      )
+
+      try {
+        await supabase
+          .from('widgets')
+          .update({ data: newData, updated_at: getCurrentTimestamp() })
+          .eq('id', existing.id)
+        await supabase
+          .from('widgets')
+          .update({ tab_id: null })
+          .eq('room_id', roomId)
+          .eq('tab_id', tabId)
+        return true
+      } catch (err) {
+        console.error(err)
+        await fetchWidgets()
+        return false
+      } finally {
+        optimisticUpdates.current.delete(existing.id)
+      }
+    },
+    [roomId, widgets, fetchWidgets]
+  )
+
+  // ─────────────────────────────────────────────
+  // 탭: 위젯의 탭 배속 변경
+  // ─────────────────────────────────────────────
+  const setWidgetTab = useCallback(
+    async (widgetId: string, tabId: string | null): Promise<boolean> => {
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) => (w.id === widgetId ? { ...w, tab_id: tabId } : w))
+      )
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ tab_id: tabId })
+          .eq('id', widgetId)
+        if (err) throw err
+        return true
+      } catch (err) {
+        console.error(err)
+        await fetchWidgets()
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [fetchWidgets]
+  )
+
   return {
     widgets,
     isLoading,
     error,
     refetch: fetchWidgets,
+    tabs,
+    createTab,
+    deleteTab,
+    setWidgetTab,
     createWidget,
     deleteWidget,
     addChecklistItem,

@@ -12,11 +12,11 @@ import MemberWidget from '@/components/Widgets/MemberWidget'
 import LedgerWidget from '@/components/Widgets/LedgerWidget'
 import FeeWidget from '@/components/Widgets/FeeWidget'
 import AddWidgetDrawer from '@/components/Widgets/AddWidgetDrawer'
-import { Share2, Users, Plus, ArrowLeft, LayoutGrid, BookOpen } from 'lucide-react'
+import { Share2, Users, Plus, ArrowLeft, BookOpen, X } from 'lucide-react'
 import { generateShareUrl } from '@/lib/utils'
 import type { Room, Participant } from '@/types'
 
-type ActiveTab = 'widgets' | 'ledger'
+type ActiveSection = 'widgets' | 'ledger'
 
 export default function RoomPage() {
   const params = useParams()
@@ -35,7 +35,10 @@ export default function RoomPage() {
   const [error, setError] = useState<string | null>(null)
   const [shareSuccess, setShareSuccess] = useState(false)
   const [hasJoined, setHasJoined] = useState(false)
-  const [activeTab, setActiveTab] = useState<ActiveTab>('widgets')
+  const [activeSection, setActiveSection] = useState<ActiveSection>('widgets')
+  const [activeCustomTab, setActiveCustomTab] = useState<string | null>(null)
+  const [addingTab, setAddingTab] = useState(false)
+  const [newTabName, setNewTabName] = useState('')
   const [isCreatingLedger, setIsCreatingLedger] = useState(false)
   const ledgerInitRef = useRef(false)
 
@@ -43,6 +46,10 @@ export default function RoomPage() {
     widgets,
     isLoading: widgetsLoading,
     error: widgetsError,
+    tabs,
+    createTab,
+    deleteTab,
+    setWidgetTab,
     createWidget,
     deleteWidget,
     addChecklistItem,
@@ -58,9 +65,12 @@ export default function RoomPage() {
     toggleFeeEntry,
   } = useWidgets(roomId)
 
-  // 장부 위젯과 일반 위젯 분리
+  // 장부·탭설정 위젯 제외한 일반 위젯
   const ledgerWidget = widgets.find((w) => w.type === 'ledger')
-  const displayWidgets = widgets.filter((w) => w.type !== 'ledger')
+  const displayWidgets = widgets.filter((w) => w.type !== 'ledger' && w.type !== 'tab-config')
+  const filteredWidgets = activeCustomTab === null
+    ? displayWidgets
+    : displayWidgets.filter((w) => w.tab_id === activeCustomTab)
 
   // 방 정보 조회
   useEffect(() => {
@@ -139,7 +149,7 @@ export default function RoomPage() {
   // 장부 탭 진입 시 ledger 위젯 자동 생성
   useEffect(() => {
     if (
-      activeTab === 'ledger' &&
+      activeSection === 'ledger' &&
       !widgetsLoading &&
       !ledgerWidget &&
       !isCreatingLedger &&
@@ -149,7 +159,7 @@ export default function RoomPage() {
       setIsCreatingLedger(true)
       createWidget('ledger', '회계 장부').finally(() => setIsCreatingLedger(false))
     }
-  }, [activeTab, widgetsLoading, ledgerWidget, isCreatingLedger, createWidget])
+  }, [activeSection, widgetsLoading, ledgerWidget, isCreatingLedger, createWidget])
 
   const joinRoom = async (nickname: string) => {
     try {
@@ -216,6 +226,26 @@ export default function RoomPage() {
   const handleToggle = async (widgetId: string, itemId: string) => {
     if ('vibrate' in navigator) navigator.vibrate(30)
     return toggleChecklistItem(widgetId, itemId)
+  }
+
+  const handleCreateWidget = async (type: Parameters<typeof createWidget>[0], title: string) => {
+    const newWidget = await createWidget(type, title)
+    if (newWidget && activeCustomTab) {
+      await setWidgetTab(newWidget.id, activeCustomTab)
+    }
+    return newWidget
+  }
+
+  const handleCreateTab = async () => {
+    const name = newTabName.trim()
+    if (!name) { setAddingTab(false); return }
+    const newTab = await createTab(name)
+    setNewTabName('')
+    setAddingTab(false)
+    if (newTab) {
+      setActiveSection('widgets')
+      setActiveCustomTab(newTab.id)
+    }
   }
 
   if (authLoading || isLoadingRoom) {
@@ -285,33 +315,95 @@ export default function RoomPage() {
       </header>
 
       {/* ── 탭 바 ── */}
-      <div className="flex-none flex bg-white border-b border-gray-100">
+      <div className="flex-none flex bg-white border-b border-gray-100 overflow-x-auto scrollbar-hide">
+        {/* 전체 탭 */}
         <button
-          onClick={() => setActiveTab('widgets')}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold transition-colors border-b-2 ${
-            activeTab === 'widgets'
+          onClick={() => { setActiveSection('widgets'); setActiveCustomTab(null) }}
+          className={`flex-none px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
+            activeSection === 'widgets' && activeCustomTab === null
               ? 'text-blue-600 border-blue-500'
               : 'text-gray-400 border-transparent'
           }`}
         >
-          <LayoutGrid size={14} />
-          위젯
+          전체
         </button>
+
+        {/* 커스텀 탭 */}
+        {tabs.map((tab) => (
+          <div key={tab.id} className="flex-none flex items-center group">
+            <button
+              onClick={() => { setActiveSection('widgets'); setActiveCustomTab(tab.id) }}
+              className={`px-3 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
+                activeSection === 'widgets' && activeCustomTab === tab.id
+                  ? 'text-blue-600 border-blue-500'
+                  : 'text-gray-400 border-transparent'
+              }`}
+            >
+              {tab.name}
+            </button>
+            <button
+              onClick={() => {
+                if (activeCustomTab === tab.id) setActiveCustomTab(null)
+                deleteTab(tab.id)
+              }}
+              className="p-1 -ml-1 text-gray-200 hover:text-red-400 active:text-red-500 transition-colors"
+              aria-label={`${tab.name} 탭 삭제`}
+            >
+              <X size={11} />
+            </button>
+          </div>
+        ))}
+
+        {/* 탭 추가 */}
+        {addingTab ? (
+          <div className="flex-none flex items-center px-2 gap-1">
+            <input
+              autoFocus
+              value={newTabName}
+              onChange={(e) => setNewTabName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreateTab()
+                if (e.key === 'Escape') { setAddingTab(false); setNewTabName('') }
+              }}
+              onBlur={() => { if (!newTabName.trim()) { setAddingTab(false) } }}
+              placeholder="탭 이름"
+              maxLength={10}
+              className="w-20 text-sm px-2 py-1 border border-blue-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-blue-50"
+            />
+            <button
+              onMouseDown={(e) => { e.preventDefault(); handleCreateTab() }}
+              className="text-xs text-blue-500 font-semibold px-1"
+            >
+              확인
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setAddingTab(true)}
+            className="flex-none px-3 py-2.5 text-gray-300 hover:text-blue-400 active:text-blue-500 transition-colors"
+            aria-label="탭 추가"
+          >
+            <Plus size={15} />
+          </button>
+        )}
+
+        {/* 장부 탭 — 오른쪽 끝 */}
+        <div className="flex-1" />
         <button
-          onClick={() => setActiveTab('ledger')}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold transition-colors border-b-2 ${
-            activeTab === 'ledger'
+          onClick={() => setActiveSection('ledger')}
+          className={`flex-none flex items-center gap-1 px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
+            activeSection === 'ledger'
               ? 'text-violet-600 border-violet-500'
               : 'text-gray-400 border-transparent'
           }`}
         >
-          <BookOpen size={14} />
-          회계 장부
+          <BookOpen size={13} />
+          장부
         </button>
       </div>
 
       {/* ── 위젯 탭 ── */}
-      {activeTab === 'widgets' && (
+      {activeSection === 'widgets' && (
         <>
           <main className="flex-1 overflow-y-auto overscroll-contain">
             <div className="px-4 py-4 space-y-3 pb-6">
@@ -337,12 +429,14 @@ export default function RoomPage() {
                     </div>
                   ))}
                 </div>
-              ) : displayWidgets.length === 0 ? (
+              ) : filteredWidgets.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-4">
                     <Plus size={28} className="text-blue-400" />
                   </div>
-                  <p className="font-semibold text-gray-700 mb-1">아직 위젯이 없어요</p>
+                  <p className="font-semibold text-gray-700 mb-1">
+                    {activeCustomTab ? '이 탭에 위젯이 없어요' : '아직 위젯이 없어요'}
+                  </p>
                   <p className="text-sm text-gray-400 mb-6">
                     체크리스트, 정산, 멤버 관리 등<br />위젯을 추가해보세요
                   </p>
@@ -354,7 +448,7 @@ export default function RoomPage() {
                   </button>
                 </div>
               ) : (
-                displayWidgets.map((widget) => {
+                filteredWidgets.map((widget) => {
                   if (widget.type === 'checklist') {
                     return (
                       <ChecklistWidget
@@ -422,7 +516,7 @@ export default function RoomPage() {
           </main>
 
           {/* 위젯 추가 버튼 (위젯이 있을 때) */}
-          {displayWidgets.length > 0 && (
+          {filteredWidgets.length > 0 && (
             <div className="flex-none bg-white border-t border-gray-100 px-4 py-3 pb-safe">
               <button
                 onClick={() => setShowAddWidget(true)}
@@ -437,7 +531,7 @@ export default function RoomPage() {
       )}
 
       {/* ── 장부 탭 ── */}
-      {activeTab === 'ledger' && (
+      {activeSection === 'ledger' && (
         <main className="flex-1 overflow-y-auto overscroll-contain">
           <div className="px-4 py-4 pb-6">
             {isCreatingLedger || (widgetsLoading && !ledgerWidget) ? (
@@ -466,7 +560,7 @@ export default function RoomPage() {
       <AddWidgetDrawer
         isOpen={showAddWidget}
         onClose={() => setShowAddWidget(false)}
-        onAdd={createWidget}
+        onAdd={handleCreateWidget}
         error={widgetsError}
       />
     </div>
