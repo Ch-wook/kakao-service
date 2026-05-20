@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { generateId, getCurrentTimestamp } from '@/lib/utils'
-import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, TabConfig, TabConfigData } from '@/types'
+import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, ScheduleData, TabConfig, TabConfigData } from '@/types'
 
 const asChecklist = (data: Record<string, unknown>): ChecklistData =>
   data as unknown as ChecklistData
@@ -33,6 +33,12 @@ const asFee = (data: Record<string, unknown>): FeeData =>
   data as unknown as FeeData
 
 const fromFee = (data: FeeData): Record<string, unknown> =>
+  data as unknown as Record<string, unknown>
+
+const asSchedule = (data: Record<string, unknown>): ScheduleData =>
+  data as unknown as ScheduleData
+
+const fromSchedule = (data: ScheduleData): Record<string, unknown> =>
   data as unknown as Record<string, unknown>
 
 
@@ -152,6 +158,7 @@ export const useWidgets = (roomId: string) => {
             fiscalYear: new Date().getFullYear().toString(),
           },
           fee: { defaultAmount: 0, entries: [] },
+          schedule: { items: [] },
         }
         const defaultData = defaultDataMap[type] ?? {}
 
@@ -702,6 +709,43 @@ export const useWidgets = (roomId: string) => {
   )
 
   // ─────────────────────────────────────────────
+  // 일정: 전체 데이터 업데이트
+  // ─────────────────────────────────────────────
+  const updateScheduleData = useCallback(
+    async (widgetId: string, newData: ScheduleData): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'schedule') return false
+
+      const currentData = asSchedule(widget.data)
+
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) => (w.id === widgetId ? { ...w, data: fromSchedule(newData) } : w))
+      )
+
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: newData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+
+        if (err) throw err
+        return true
+      } catch (err) {
+        console.error('Error updating schedule data:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? { ...w, data: fromSchedule(currentData) } : w))
+        )
+        setError('일정 데이터 업데이트 중 오류가 발생했습니다')
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [widgets]
+  )
+
+  // ─────────────────────────────────────────────
   // 탭: 파생 상태
   // ─────────────────────────────────────────────
   const tabConfigWidget = widgets.find((w) => w.type === 'tab-config')
@@ -843,5 +887,6 @@ export const useWidgets = (roomId: string) => {
     updateLedgerData,
     updateFeeData,
     toggleFeeEntry,
+    updateScheduleData,
   }
 }

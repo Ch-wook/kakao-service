@@ -33,6 +33,7 @@
 | 10단계 | 회계장부 항목 단순화 (회비·식대·지원금·물품구매·기타 직접입력), 과세구분 제거, 엑셀 스타일링 | ✅ |
 | 11단계 | 멤버 관리 위젯 UX 개선 (메모 제거, 행 높이 축소, 뱃지 소형화) | ✅ |
 | 12단계 | 위젯 탭 분류 시스템 (커스텀 탭 추가·삭제, 위젯 자동 배속, 전체/장부 탭 유지) | ✅ |
+| 13단계 | 일정 탭 추가 (달력 뷰, 일정 CRUD, 색상 구분, 시간·장소·메모 입력) | ✅ |
 | 배포 | Vercel 배포 완료 | ✅ |
 
 ---
@@ -69,6 +70,7 @@ kakao-service/
     │       ├── ExpenseWidget.tsx
     │       ├── MemberWidget.tsx      # 멤버 관리 위젯
     │       ├── LedgerWidget.tsx      # 회계장부 위젯 (SheetJS 엑셀 내보내기)
+    │       ├── ScheduleWidget.tsx    # 일정 위젯 (달력, 일정 CRUD, 색상 구분)
     │       └── AddWidgetDrawer.tsx   # vaul Bottom Sheet
     ├── hooks/
     │   ├── useAuth.ts                # 익명 로그인, 닉네임 localStorage
@@ -104,7 +106,7 @@ kakao-service/
 - `widgets` type constraint에 `tab-config` 추가
 - `tab-config` 타입 위젯: `{ tabs: [{ id, name }] }` — 방 단위로 1개 존재, 탭 목록 저장
 - 위젯 추가 시 현재 탭 자동 배속, 탭 삭제 시 해당 위젯들 tab_id 초기화
-- 탭 바: [전체] [커스텀탭...] [+] — [장부]
+- 탭 바: [전체] [커스텀탭...] [+] — [일정] [장부]
 
 ### SQL (최초 1회 실행 필요)
 ```sql
@@ -169,6 +171,22 @@ ALTER PUBLICATION supabase_realtime ADD TABLE participants;
   }]
 }
 
+// 일정
+{
+  items: [{
+    id: string,
+    title: string,
+    date: string,           // YYYY-MM-DD
+    time?: string,          // HH:MM
+    endTime?: string,       // HH:MM
+    location?: string,
+    memo?: string,
+    participants: string[], // 작성자 닉네임
+    color?: 'blue'|'green'|'red'|'orange'|'purple'|'pink',
+    created_at: string
+  }]
+}
+
 // 회계장부
 {
   entries: [{
@@ -215,6 +233,9 @@ toggleMemberStatus(widgetId, groupId, memberId)  // Optimistic, 상태 순환
 
 // 회계장부
 updateLedgerData(widgetId, data: LedgerData)     // Optimistic, 거래 추가·수정·삭제·설정 변경 통합
+
+// 일정
+updateScheduleData(widgetId, data: ScheduleData) // Optimistic, 일정 추가·수정·삭제 통합
 ```
 
 ---

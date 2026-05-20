@@ -1,5 +1,29 @@
 # RENAME.md — 변경 이력 요약
 
+## 2026-05-20 (3차)
+
+### feat: 일정 탭 및 달력 위젯 추가 (13단계)
+
+**변경 파일**:
+- `collab-tool/types/index.ts` — `ScheduleItem`에 `endTime`, `memo`, `color`, `created_at` 필드 추가, `ScheduleColor` 타입 추가
+- `collab-tool/hooks/useWidgets.ts` — `updateScheduleData` 함수 추가, schedule defaultData 추가
+- `collab-tool/components/Widgets/ScheduleWidget.tsx` — 신규 생성 (달력 그리드, 일정 CRUD, 색상 구분)
+- `collab-tool/app/room/[id]/page.tsx` — `ActiveSection`에 `'schedule'` 추가, 일정 탭 버튼 및 섹션 렌더링, 자동 위젯 생성 로직
+- `collab-tool/CONTEXT.md` — 13단계 내용 반영
+
+**주요 기능**:
+- 탭 바 오른쪽 끝에 [일정] [장부] 고정 탭 배치
+- 월별 달력 그리드 (7×6), 오늘 날짜 하이라이트, 월 이동 네비게이션
+- 일정 있는 날짜에 색상 dot 표시 (최대 3개)
+- 날짜 선택 시 해당 날짜 일정 목록 표시 (시간순 정렬)
+- 일정 추가/수정: 제목·날짜·시작/종료시간·장소·메모·색상(6가지) 입력
+- 일정 삭제, 월 전체 일정 미리보기 리스트
+- 일정 탭 진입 시 `schedule` 위젯 자동 생성 (장부 탭과 동일 패턴)
+
+**DB**: 기존 constraint에 `schedule` 이미 포함됨 — 추가 SQL 불필요
+
+---
+
 ## 2026-05-20 (2차)
 
 ### feat: 위젯 탭 분류 시스템 추가

@@ -73,13 +73,19 @@ export interface VoteData {
   created_at?: string
 }
 
+export type ScheduleColor = 'blue' | 'green' | 'red' | 'orange' | 'purple' | 'pink'
+
 export interface ScheduleItem {
   id: string
   title: string
-  date: string
-  time?: string
-  participants: string[]
+  date: string          // YYYY-MM-DD
+  time?: string         // HH:MM
+  endTime?: string      // HH:MM
   location?: string
+  memo?: string
+  participants: string[]
+  color?: ScheduleColor
+  created_at: string
 }
 
 export interface ScheduleData {

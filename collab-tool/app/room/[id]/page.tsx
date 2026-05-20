@@ -11,12 +11,13 @@ import ExpenseWidget from '@/components/Widgets/ExpenseWidget'
 import MemberWidget from '@/components/Widgets/MemberWidget'
 import LedgerWidget from '@/components/Widgets/LedgerWidget'
 import FeeWidget from '@/components/Widgets/FeeWidget'
+import ScheduleWidget from '@/components/Widgets/ScheduleWidget'
 import AddWidgetDrawer from '@/components/Widgets/AddWidgetDrawer'
-import { Share2, Users, Plus, ArrowLeft, BookOpen, X } from 'lucide-react'
+import { Share2, Users, Plus, ArrowLeft, BookOpen, CalendarDays, X } from 'lucide-react'
 import { generateShareUrl } from '@/lib/utils'
 import type { Room, Participant } from '@/types'
 
-type ActiveSection = 'widgets' | 'ledger'
+type ActiveSection = 'widgets' | 'ledger' | 'schedule'
 
 export default function RoomPage() {
   const params = useParams()
@@ -40,7 +41,9 @@ export default function RoomPage() {
   const [addingTab, setAddingTab] = useState(false)
   const [newTabName, setNewTabName] = useState('')
   const [isCreatingLedger, setIsCreatingLedger] = useState(false)
+  const [isCreatingSchedule, setIsCreatingSchedule] = useState(false)
   const ledgerInitRef = useRef(false)
+  const scheduleInitRef = useRef(false)
 
   const {
     widgets,
@@ -63,11 +66,13 @@ export default function RoomPage() {
     updateLedgerData,
     updateFeeData,
     toggleFeeEntry,
+    updateScheduleData,
   } = useWidgets(roomId)
 
-  // 장부·탭설정 위젯 제외한 일반 위젯
+  // 장부·일정·탭설정 위젯 제외한 일반 위젯
   const ledgerWidget = widgets.find((w) => w.type === 'ledger')
-  const displayWidgets = widgets.filter((w) => w.type !== 'ledger' && w.type !== 'tab-config')
+  const scheduleWidget = widgets.find((w) => w.type === 'schedule')
+  const displayWidgets = widgets.filter((w) => w.type !== 'ledger' && w.type !== 'schedule' && w.type !== 'tab-config')
   const filteredWidgets = activeCustomTab === null
     ? displayWidgets
     : displayWidgets.filter((w) => w.tab_id === activeCustomTab)
@@ -160,6 +165,21 @@ export default function RoomPage() {
       createWidget('ledger', '회계 장부').finally(() => setIsCreatingLedger(false))
     }
   }, [activeSection, widgetsLoading, ledgerWidget, isCreatingLedger, createWidget])
+
+  // 일정 탭 진입 시 schedule 위젯 자동 생성
+  useEffect(() => {
+    if (
+      activeSection === 'schedule' &&
+      !widgetsLoading &&
+      !scheduleWidget &&
+      !isCreatingSchedule &&
+      !scheduleInitRef.current
+    ) {
+      scheduleInitRef.current = true
+      setIsCreatingSchedule(true)
+      createWidget('schedule', '일정').finally(() => setIsCreatingSchedule(false))
+    }
+  }, [activeSection, widgetsLoading, scheduleWidget, isCreatingSchedule, createWidget])
 
   const joinRoom = async (nickname: string) => {
     try {
@@ -387,11 +407,22 @@ export default function RoomPage() {
           </button>
         )}
 
-        {/* 장부 탭 — 오른쪽 끝 */}
+        {/* 일정·장부 탭 — 오른쪽 끝 */}
         <div className="flex-1" />
         <button
+          onClick={() => setActiveSection('schedule')}
+          className={`flex-none flex items-center gap-1 px-3 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
+            activeSection === 'schedule'
+              ? 'text-emerald-600 border-emerald-500'
+              : 'text-gray-400 border-transparent'
+          }`}
+        >
+          <CalendarDays size={13} />
+          일정
+        </button>
+        <button
           onClick={() => setActiveSection('ledger')}
-          className={`flex-none flex items-center gap-1 px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
+          className={`flex-none flex items-center gap-1 px-3 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
             activeSection === 'ledger'
               ? 'text-violet-600 border-violet-500'
               : 'text-gray-400 border-transparent'
@@ -528,6 +559,26 @@ export default function RoomPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* ── 일정 탭 ── */}
+      {activeSection === 'schedule' && (
+        <main className="flex-1 overflow-y-auto overscroll-contain">
+          <div className="px-4 py-4 pb-6">
+            {isCreatingSchedule || (widgetsLoading && !scheduleWidget) ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="animate-spin w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full mb-3" />
+                <p className="text-sm text-gray-400">일정 불러오는 중...</p>
+              </div>
+            ) : scheduleWidget ? (
+              <ScheduleWidget
+                widget={scheduleWidget}
+                nickname={session.nickname ?? undefined}
+                onUpdateData={updateScheduleData}
+              />
+            ) : null}
+          </div>
+        </main>
       )}
 
       {/* ── 장부 탭 ── */}
