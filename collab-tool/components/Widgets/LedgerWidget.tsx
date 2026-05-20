@@ -88,15 +88,15 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
     [widget.id, onUpdateData]
   )
 
-  // 날짜순 정렬 후 잔액 누적 계산
+  // 날짜순 정렬 후 잔액 누적 계산 (구버전 데이터 호환: created_at 없을 수 있음)
   const entriesWithBalance = useMemo(() => {
     const sorted = [...data.entries].sort((a, b) => {
-      const d = a.date.localeCompare(b.date)
-      return d !== 0 ? d : a.created_at.localeCompare(b.created_at)
+      const d = (a.date ?? '').localeCompare(b.date ?? '')
+      return d !== 0 ? d : (a.created_at ?? '').localeCompare(b.created_at ?? '')
     })
     let balance = data.openingBalance
     return sorted.map((e) => {
-      balance = e.type === 'income' ? balance + e.amount : balance - e.amount
+      balance = e.type === 'income' ? balance + (e.amount ?? 0) : balance - (e.amount ?? 0)
       return { ...e, calculatedBalance: balance }
     })
   }, [data.entries, data.openingBalance])
@@ -160,8 +160,8 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
     setForm({
       date: entry.date, type: entry.type, category: entry.category,
       description: entry.description, amount: String(entry.amount),
-      taxType: entry.taxType, paymentMethod: entry.paymentMethod,
-      voucherType: entry.voucherType, memo: entry.memo,
+      taxType: entry.taxType ?? '과세', paymentMethod: entry.paymentMethod ?? '현금',
+      voucherType: entry.voucherType ?? '없음', memo: entry.memo ?? '',
     })
     setEditingId(entry.id)
     setExpandedId(null)
@@ -390,9 +390,9 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
                     <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs mb-3">
                       <Detail label="계정과목" value={entry.category} />
                       <Detail label="적요" value={entry.description} />
-                      <Detail label="과세구분" value={entry.taxType} />
-                      <Detail label="결제수단" value={entry.paymentMethod} />
-                      <Detail label="증빙서류" value={entry.voucherType} />
+                      <Detail label="과세구분" value={entry.taxType ?? '-'} />
+                      <Detail label="결제수단" value={entry.paymentMethod ?? '-'} />
+                      <Detail label="증빙서류" value={entry.voucherType ?? '-'} />
                       <Detail
                         label={entry.type === 'income' ? '수입금액' : '지출금액'}
                         value={`${fmt(entry.amount)}원`}
