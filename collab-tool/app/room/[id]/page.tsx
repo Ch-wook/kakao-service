@@ -15,7 +15,7 @@ import ScheduleWidget from '@/components/Widgets/ScheduleWidget'
 import MemoWidget from '@/components/Widgets/MemoWidget'
 import NoticeBanner, { NoticeAddBar } from '@/components/NoticeBanner'
 import AddWidgetDrawer from '@/components/Widgets/AddWidgetDrawer'
-import { Share2, Users, Plus, ArrowLeft, BookOpen, CalendarDays, X } from 'lucide-react'
+import { Share2, Users, Plus, ArrowLeft, BookOpen, CalendarDays, X, LayoutGrid } from 'lucide-react'
 import { generateShareUrl } from '@/lib/utils'
 import type { Room, Participant } from '@/types'
 
@@ -306,23 +306,23 @@ export default function RoomPage() {
   return (
     <div className="h-dvh flex flex-col bg-gray-50 overflow-hidden">
       {/* ── Sticky Header ── */}
-      <header className="flex-none bg-white border-b border-gray-100 px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
+      <header className="flex-none bg-white border-b border-gray-100 px-3 py-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
             <button
               onClick={() => router.back()}
-              className="flex-none p-2 -ml-2 text-gray-500 active:bg-gray-100 rounded-xl"
+              className="flex-none p-1.5 -ml-1 text-gray-500 active:bg-gray-100 rounded-xl"
               aria-label="뒤로가기"
             >
-              <ArrowLeft size={20} />
+              <ArrowLeft size={18} />
             </button>
             <div className="min-w-0">
-              <h1 className="font-bold text-gray-900 truncate leading-tight">
+              <h1 className="font-bold text-gray-900 truncate leading-tight text-sm">
                 {room?.title || '협업'}
               </h1>
-              <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
-                <Users size={10} />
-                <span>{participants.length}명 참여 중</span>
+              <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                <Users size={9} />
+                <span>{participants.length}명</span>
                 {currentParticipant && (
                   <span className="text-blue-400">• {currentParticipant.nickname}</span>
                 )}
@@ -330,13 +330,25 @@ export default function RoomPage() {
             </div>
           </div>
 
-          <button
-            onClick={handleShare}
-            className="flex-none flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-600 rounded-xl text-sm font-medium active:bg-blue-100 transition-colors"
-          >
-            <Share2 size={14} />
-            <span>{shareSuccess ? '복사됨!' : '공유'}</span>
-          </button>
+          <div className="flex items-center gap-1.5 flex-none">
+            {/* 위젯 추가 버튼 — widgets 탭일 때만 */}
+            {activeSection === 'widgets' && (
+              <button
+                onClick={() => setShowAddWidget(true)}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-500 text-white rounded-xl text-xs font-semibold active:bg-blue-600 transition-colors"
+              >
+                <LayoutGrid size={13} />
+                <span>위젯</span>
+              </button>
+            )}
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-600 rounded-xl text-xs font-semibold active:bg-blue-100 transition-colors"
+            >
+              <Share2 size={13} />
+              <span>{shareSuccess ? '복사됨!' : '공유'}</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -345,7 +357,7 @@ export default function RoomPage() {
         {/* 전체 탭 */}
         <button
           onClick={() => { setActiveSection('widgets'); setActiveCustomTab(null) }}
-          className={`flex-none px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
+          className={`flex-none px-4 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors ${
             activeSection === 'widgets' && activeCustomTab === null
               ? 'text-blue-600 border-blue-500'
               : 'text-gray-400 border-transparent'
@@ -359,7 +371,7 @@ export default function RoomPage() {
           <div key={tab.id} className="flex-none flex items-center group">
             <button
               onClick={() => { setActiveSection('widgets'); setActiveCustomTab(tab.id) }}
-              className={`px-3 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
+              className={`px-3 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors ${
                 activeSection === 'widgets' && activeCustomTab === tab.id
                   ? 'text-blue-600 border-blue-500'
                   : 'text-gray-400 border-transparent'
@@ -417,7 +429,7 @@ export default function RoomPage() {
         <div className="flex-1" />
         <button
           onClick={() => setActiveSection('schedule')}
-          className={`flex-none flex items-center gap-1 px-3 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
+          className={`flex-none flex items-center gap-1 px-3 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors ${
             activeSection === 'schedule'
               ? 'text-emerald-600 border-emerald-500'
               : 'text-gray-400 border-transparent'
@@ -428,7 +440,7 @@ export default function RoomPage() {
         </button>
         <button
           onClick={() => setActiveSection('ledger')}
-          className={`flex-none flex items-center gap-1 px-3 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
+          className={`flex-none flex items-center gap-1 px-3 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors ${
             activeSection === 'ledger'
               ? 'text-violet-600 border-violet-500'
               : 'text-gray-400 border-transparent'
@@ -439,28 +451,30 @@ export default function RoomPage() {
         </button>
       </div>
 
-      {/* ── 공지 배너 (탭 바 바로 아래 고정) ── */}
-      {noticeData?.content ? (
-        <NoticeBanner
-          content={noticeData.content}
-          updatedBy={noticeData.updated_by}
-          updatedAt={noticeData.updated_at}
-          nickname={session.nickname ?? undefined}
-          onSave={upsertNotice}
-          onDelete={async () => noticeWidget ? deleteWidget(noticeWidget.id) : false}
-        />
-      ) : (
-        <NoticeAddBar
-          nickname={session.nickname ?? undefined}
-          onAdd={upsertNotice}
-        />
+      {/* ── 공지 배너 — widgets 탭일 때만 표시 ── */}
+      {activeSection === 'widgets' && (
+        noticeData?.content ? (
+          <NoticeBanner
+            content={noticeData.content}
+            updatedBy={noticeData.updated_by}
+            updatedAt={noticeData.updated_at}
+            nickname={session.nickname ?? undefined}
+            onSave={upsertNotice}
+            onDelete={async () => noticeWidget ? deleteWidget(noticeWidget.id) : false}
+          />
+        ) : (
+          <NoticeAddBar
+            nickname={session.nickname ?? undefined}
+            onAdd={upsertNotice}
+          />
+        )
       )}
 
       {/* ── 위젯 탭 ── */}
       {activeSection === 'widgets' && (
         <>
           <main className="flex-1 overflow-y-auto overscroll-contain">
-            <div className="px-4 py-4 space-y-3 pb-6">
+            <div className="px-3 py-3 space-y-2.5 pb-6">
               {(error || widgetsError) && (
                 <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-700">
                   {error || widgetsError}
@@ -484,22 +498,16 @@ export default function RoomPage() {
                   ))}
                 </div>
               ) : filteredWidgets.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-4">
-                    <Plus size={28} className="text-blue-400" />
+                <div className="flex flex-col items-center justify-center py-14 text-center">
+                  <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mb-3">
+                    <LayoutGrid size={22} className="text-blue-400" />
                   </div>
-                  <p className="font-semibold text-gray-700 mb-1">
+                  <p className="text-sm font-semibold text-gray-700 mb-1">
                     {activeCustomTab ? '이 탭에 위젯이 없어요' : '아직 위젯이 없어요'}
                   </p>
-                  <p className="text-sm text-gray-400 mb-6">
-                    체크리스트, 정산, 멤버 관리 등<br />위젯을 추가해보세요
+                  <p className="text-xs text-gray-400">
+                    위쪽 위젯 버튼으로 추가해보세요
                   </p>
-                  <button
-                    onClick={() => setShowAddWidget(true)}
-                    className="px-6 py-3 bg-blue-500 text-white rounded-2xl text-sm font-semibold active:bg-blue-600 transition-colors"
-                  >
-                    위젯 추가하기
-                  </button>
                 </div>
               ) : (
                 filteredWidgets.map((widget) => {
@@ -580,25 +588,13 @@ export default function RoomPage() {
             </div>
           </main>
 
-          {/* 위젯 추가 버튼 (위젯이 있을 때) */}
-          {filteredWidgets.length > 0 && (
-            <div className="flex-none bg-white border-t border-gray-100 px-4 py-3 pb-safe">
-              <button
-                onClick={() => setShowAddWidget(true)}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-500 text-white rounded-2xl font-semibold text-base active:bg-blue-600 transition-colors shadow-sm"
-              >
-                <Plus size={20} />
-                위젯 추가하기
-              </button>
-            </div>
-          )}
         </>
       )}
 
       {/* ── 일정 탭 ── */}
       {activeSection === 'schedule' && (
         <main className="flex-1 overflow-y-auto overscroll-contain">
-          <div className="px-4 py-4 pb-6">
+          <div className="px-3 py-3 pb-6">
             {isCreatingSchedule || (widgetsLoading && !scheduleWidget) ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <div className="animate-spin w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full mb-3" />
@@ -618,7 +614,7 @@ export default function RoomPage() {
       {/* ── 장부 탭 ── */}
       {activeSection === 'ledger' && (
         <main className="flex-1 overflow-y-auto overscroll-contain">
-          <div className="px-4 py-4 pb-6">
+          <div className="px-3 py-3 pb-6">
             {isCreatingLedger || (widgetsLoading && !ledgerWidget) ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <div className="animate-spin w-8 h-8 border-4 border-violet-400 border-t-transparent rounded-full mb-3" />
