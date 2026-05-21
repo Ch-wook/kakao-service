@@ -32,7 +32,7 @@ export interface NoticeData {
 export interface Widget {
   id: string
   room_id: string
-  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll' | 'member' | 'ledger' | 'fee' | 'tab-config' | 'notice'
+  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll' | 'member' | 'ledger' | 'fee' | 'tab-config' | 'notice' | 'image-gallery' | 'music-player'
   title?: string
   data: Record<string, unknown>
   order: number
@@ -177,4 +177,37 @@ export interface FeeEntry {
 export interface FeeData {
   defaultAmount: number
   entries: FeeEntry[]
+}
+
+// ── 이미지 갤러리 ──────────────────────────────────────────
+
+export interface GalleryImage {
+  id: string
+  url: string
+  storagePath: string
+  filename: string
+  uploaderNickname?: string
+  uploadedAt: string
+  size: number
+}
+
+export interface ImageGalleryData {
+  images: GalleryImage[]
+}
+
+// ── 음악 플레이어 ──────────────────────────────────────────
+
+export interface MusicTrack {
+  id: string
+  url: string
+  storagePath: string
+  name: string
+  originalFilename: string
+  uploaderNickname?: string
+  uploadedAt: string
+  size: number
+}
+
+export interface MusicPlayerData {
+  tracks: MusicTrack[]
 }

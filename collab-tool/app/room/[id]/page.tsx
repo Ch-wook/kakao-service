@@ -13,6 +13,8 @@ import LedgerWidget from '@/components/Widgets/LedgerWidget'
 import FeeWidget from '@/components/Widgets/FeeWidget'
 import ScheduleWidget from '@/components/Widgets/ScheduleWidget'
 import MemoWidget from '@/components/Widgets/MemoWidget'
+import ImageGalleryWidget from '@/components/Widgets/ImageGalleryWidget'
+import MusicPlayerWidget from '@/components/Widgets/MusicPlayerWidget'
 import NoticeBanner, { NoticeAddBar } from '@/components/NoticeBanner'
 import AddWidgetDrawer from '@/components/Widgets/AddWidgetDrawer'
 import { Share2, Users, Plus, ArrowLeft, BookOpen, CalendarDays, X, LayoutGrid } from 'lucide-react'
@@ -71,6 +73,11 @@ export default function RoomPage() {
     updateScheduleData,
     updateMemoData,
     upsertNotice,
+    uploadImage,
+    deleteImage,
+    uploadTrack,
+    deleteTrack,
+    updateTrackName,
   } = useWidgets(roomId)
 
   // 장부·일정·공지·탭설정 위젯 제외한 일반 위젯
@@ -569,6 +576,31 @@ export default function RoomPage() {
                         widget={widget}
                         nickname={session.nickname ?? undefined}
                         onUpdateData={updateMemoData}
+                        onDeleteWidget={deleteWidget}
+                      />
+                    )
+                  }
+                  if (widget.type === 'image-gallery') {
+                    return (
+                      <ImageGalleryWidget
+                        key={widget.id}
+                        widget={widget}
+                        nickname={session.nickname ?? undefined}
+                        onUploadImage={uploadImage}
+                        onDeleteImage={deleteImage}
+                        onDeleteWidget={deleteWidget}
+                      />
+                    )
+                  }
+                  if (widget.type === 'music-player') {
+                    return (
+                      <MusicPlayerWidget
+                        key={widget.id}
+                        widget={widget}
+                        nickname={session.nickname ?? undefined}
+                        onUploadTrack={uploadTrack}
+                        onDeleteTrack={deleteTrack}
+                        onUpdateTrackName={updateTrackName}
                         onDeleteWidget={deleteWidget}
                       />
                     )

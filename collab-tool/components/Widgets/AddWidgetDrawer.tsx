@@ -48,6 +48,18 @@ const WIDGET_OPTIONS: {
     description: '모두가 함께 편집하는 자유 메모장',
     emoji: '📝',
   },
+  {
+    type: 'image-gallery',
+    label: '이미지 갤러리',
+    description: '사진을 업로드하고 함께 감상하세요',
+    emoji: '🖼️',
+  },
+  {
+    type: 'music-player',
+    label: '음악 플레이어',
+    description: '음악을 올리고 함께 들어보세요',
+    emoji: '🎵',
+  },
 ]
 
 export default function AddWidgetDrawer({ isOpen, onClose, onAdd, error }: AddWidgetDrawerProps) {

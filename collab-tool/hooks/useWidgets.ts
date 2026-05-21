@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { generateId, getCurrentTimestamp } from '@/lib/utils'
-import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, ScheduleData, MemoData, NoticeData, TabConfig, TabConfigData } from '@/types'
+import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, ScheduleData, MemoData, NoticeData, TabConfig, TabConfigData, ImageGalleryData, GalleryImage, MusicPlayerData, MusicTrack } from '@/types'
 
 const asChecklist = (data: Record<string, unknown>): ChecklistData =>
   data as unknown as ChecklistData
@@ -51,6 +51,18 @@ const asNotice = (data: Record<string, unknown>): NoticeData =>
   data as unknown as NoticeData
 
 const fromNotice = (data: NoticeData): Record<string, unknown> =>
+  data as unknown as Record<string, unknown>
+
+const asGallery = (data: Record<string, unknown>): ImageGalleryData =>
+  data as unknown as ImageGalleryData
+
+const fromGallery = (data: ImageGalleryData): Record<string, unknown> =>
+  data as unknown as Record<string, unknown>
+
+const asMusic = (data: Record<string, unknown>): MusicPlayerData =>
+  data as unknown as MusicPlayerData
+
+const fromMusic = (data: MusicPlayerData): Record<string, unknown> =>
   data as unknown as Record<string, unknown>
 
 
@@ -173,6 +185,8 @@ export const useWidgets = (roomId: string) => {
           schedule: { items: [] },
           memo: { content: '' },
           notice: { content: '' },
+          'image-gallery': { images: [] },
+          'music-player': { tracks: [] },
         }
         const defaultData = defaultDataMap[type] ?? {}
 
@@ -970,6 +984,315 @@ export const useWidgets = (roomId: string) => {
     [fetchWidgets]
   )
 
+  // ─────────────────────────────────────────────
+  // 이미지 갤러리: 이미지 업로드
+  // ─────────────────────────────────────────────
+  const uploadImage = useCallback(
+    async (
+      widgetId: string,
+      file: File,
+      nickname: string | undefined,
+      onProgress: (pct: number) => void
+    ): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'image-gallery') return false
+
+      if (file.size > 10 * 1024 * 1024) throw new Error('파일 크기는 10MB 이하여야 합니다')
+      if (!file.type.startsWith('image/')) throw new Error('이미지 파일만 업로드할 수 있습니다')
+
+      const uuid = crypto.randomUUID()
+      const storagePath = `images/${roomId}/${widgetId}/${uuid}-${file.name}`
+
+      // fake progress ticker
+      let pct = 10
+      onProgress(pct)
+      const ticker = setInterval(() => {
+        pct = Math.min(pct + 5, 90)
+        onProgress(pct)
+      }, 200)
+
+      try {
+        const { error: uploadErr } = await supabase.storage
+          .from('collab-files')
+          .upload(storagePath, file)
+        clearInterval(ticker)
+        if (uploadErr) throw uploadErr
+        onProgress(100)
+
+        const { data: urlData } = supabase.storage
+          .from('collab-files')
+          .getPublicUrl(storagePath)
+
+        const newImage: GalleryImage = {
+          id: generateId(),
+          url: urlData.publicUrl,
+          storagePath,
+          filename: file.name,
+          uploaderNickname: nickname,
+          uploadedAt: getCurrentTimestamp(),
+          size: file.size,
+        }
+
+        const currentData = asGallery(widget.data)
+        const updatedData: ImageGalleryData = {
+          images: [...(currentData.images || []), newImage],
+        }
+
+        optimisticUpdates.current.add(widgetId)
+        setWidgets((prev) =>
+          prev.map((w) =>
+            w.id === widgetId ? { ...w, data: fromGallery(updatedData) } : w
+          )
+        )
+
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: updatedData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+
+        if (err) {
+          await supabase.storage.from('collab-files').remove([storagePath])
+          throw err
+        }
+        return true
+      } catch (err) {
+        clearInterval(ticker)
+        onProgress(0)
+        console.error('Error uploading image:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? widget : w))
+        )
+        throw err
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [roomId, widgets]
+  )
+
+  // ─────────────────────────────────────────────
+  // 이미지 갤러리: 이미지 삭제
+  // ─────────────────────────────────────────────
+  const deleteImage = useCallback(
+    async (widgetId: string, imageId: string): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'image-gallery') return false
+
+      const currentData = asGallery(widget.data)
+      const image = currentData.images?.find((img) => img.id === imageId)
+      if (!image) return false
+
+      const updatedData: ImageGalleryData = {
+        images: (currentData.images || []).filter((img) => img.id !== imageId),
+      }
+
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) =>
+          w.id === widgetId ? { ...w, data: fromGallery(updatedData) } : w
+        )
+      )
+
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: updatedData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+        if (err) throw err
+
+        // storage 삭제는 soft fail (UI 일관성 우선)
+        await supabase.storage.from('collab-files').remove([image.storagePath]).catch(console.error)
+        return true
+      } catch (err) {
+        console.error('Error deleting image:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? widget : w))
+        )
+        setError('이미지 삭제 중 오류가 발생했습니다')
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [widgets]
+  )
+
+  // ─────────────────────────────────────────────
+  // 음악 플레이어: 트랙 업로드
+  // ─────────────────────────────────────────────
+  const uploadTrack = useCallback(
+    async (
+      widgetId: string,
+      file: File,
+      nickname: string | undefined,
+      onProgress: (pct: number) => void
+    ): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'music-player') return false
+
+      if (file.size > 50 * 1024 * 1024) throw new Error('파일 크기는 50MB 이하여야 합니다')
+      if (!file.type.startsWith('audio/')) throw new Error('오디오 파일만 업로드할 수 있습니다')
+
+      const uuid = crypto.randomUUID()
+      const storagePath = `music/${roomId}/${widgetId}/${uuid}-${file.name}`
+
+      let pct = 10
+      onProgress(pct)
+      const ticker = setInterval(() => {
+        pct = Math.min(pct + 5, 90)
+        onProgress(pct)
+      }, 200)
+
+      try {
+        const { error: uploadErr } = await supabase.storage
+          .from('collab-files')
+          .upload(storagePath, file)
+        clearInterval(ticker)
+        if (uploadErr) throw uploadErr
+        onProgress(100)
+
+        const { data: urlData } = supabase.storage
+          .from('collab-files')
+          .getPublicUrl(storagePath)
+
+        const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '')
+        const newTrack: MusicTrack = {
+          id: generateId(),
+          url: urlData.publicUrl,
+          storagePath,
+          name: nameWithoutExt,
+          originalFilename: file.name,
+          uploaderNickname: nickname,
+          uploadedAt: getCurrentTimestamp(),
+          size: file.size,
+        }
+
+        const currentData = asMusic(widget.data)
+        const updatedData: MusicPlayerData = {
+          tracks: [...(currentData.tracks || []), newTrack],
+        }
+
+        optimisticUpdates.current.add(widgetId)
+        setWidgets((prev) =>
+          prev.map((w) =>
+            w.id === widgetId ? { ...w, data: fromMusic(updatedData) } : w
+          )
+        )
+
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: updatedData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+
+        if (err) {
+          await supabase.storage.from('collab-files').remove([storagePath])
+          throw err
+        }
+        return true
+      } catch (err) {
+        clearInterval(ticker)
+        onProgress(0)
+        console.error('Error uploading track:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? widget : w))
+        )
+        throw err
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [roomId, widgets]
+  )
+
+  // ─────────────────────────────────────────────
+  // 음악 플레이어: 트랙 삭제
+  // ─────────────────────────────────────────────
+  const deleteTrack = useCallback(
+    async (widgetId: string, trackId: string): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'music-player') return false
+
+      const currentData = asMusic(widget.data)
+      const track = currentData.tracks?.find((t) => t.id === trackId)
+      if (!track) return false
+
+      const updatedData: MusicPlayerData = {
+        tracks: (currentData.tracks || []).filter((t) => t.id !== trackId),
+      }
+
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) =>
+          w.id === widgetId ? { ...w, data: fromMusic(updatedData) } : w
+        )
+      )
+
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: updatedData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+        if (err) throw err
+
+        await supabase.storage.from('collab-files').remove([track.storagePath]).catch(console.error)
+        return true
+      } catch (err) {
+        console.error('Error deleting track:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? widget : w))
+        )
+        setError('트랙 삭제 중 오류가 발생했습니다')
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [widgets]
+  )
+
+  // ─────────────────────────────────────────────
+  // 음악 플레이어: 트랙명 수정
+  // ─────────────────────────────────────────────
+  const updateTrackName = useCallback(
+    async (widgetId: string, trackId: string, newName: string): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'music-player') return false
+
+      const currentData = asMusic(widget.data)
+      const updatedData: MusicPlayerData = {
+        tracks: (currentData.tracks || []).map((t) =>
+          t.id === trackId ? { ...t, name: newName } : t
+        ),
+      }
+
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) =>
+          w.id === widgetId ? { ...w, data: fromMusic(updatedData) } : w
+        )
+      )
+
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: updatedData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+        if (err) throw err
+        return true
+      } catch (err) {
+        console.error('Error updating track name:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? widget : w))
+        )
+        setError('트랙명 수정 중 오류가 발생했습니다')
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [widgets]
+  )
+
   return {
     widgets,
     isLoading,
@@ -995,5 +1318,10 @@ export const useWidgets = (roomId: string) => {
     updateScheduleData,
     updateMemoData,
     upsertNotice,
+    uploadImage,
+    deleteImage,
+    uploadTrack,
+    deleteTrack,
+    updateTrackName,
   }
 }
