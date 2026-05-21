@@ -5,6 +5,50 @@ import { supabase } from '@/lib/supabase'
 import { generateId, getCurrentTimestamp } from '@/lib/utils'
 import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, ScheduleData, MemoData, NoticeData, TabConfig, TabConfigData, ImageGalleryData, GalleryImage, MusicPlayerData, MusicTrack } from '@/types'
 
+// 파일명 특수문자 제거 (Storage 경로 안전화)
+const sanitizeFilename = (name: string): string =>
+  name.replace(/[^\w.\-]/g, '_').replace(/_{2,}/g, '_')
+
+// XHR 기반 실제 progress 업로드 (Supabase Storage REST API 직접 호출)
+const uploadWithProgress = async (
+  storagePath: string,
+  file: File,
+  onProgress: (pct: number) => void
+): Promise<void> => {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const encodedPath = storagePath.split('/').map(encodeURIComponent).join('/')
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${supabaseUrl}/storage/v1/object/collab-files/${encodedPath}`)
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+    xhr.setRequestHeader('x-upsert', 'false')
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
+    }
+    xhr.onload = () => {
+      if (xhr.status === 200 || xhr.status === 201) {
+        onProgress(100)
+        resolve()
+      } else {
+        try {
+          const body = JSON.parse(xhr.responseText)
+          reject(new Error(body?.message ?? '업로드에 실패했습니다'))
+        } catch {
+          reject(new Error(`업로드에 실패했습니다 (${xhr.status})`))
+        }
+      }
+    }
+    xhr.onerror = () => reject(new Error('네트워크 오류가 발생했습니다'))
+    xhr.ontimeout = () => reject(new Error('업로드 시간이 초과됐습니다'))
+    xhr.send(file)
+  })
+}
+
 const asChecklist = (data: Record<string, unknown>): ChecklistData =>
   data as unknown as ChecklistData
 
@@ -1001,23 +1045,11 @@ export const useWidgets = (roomId: string) => {
       if (!file.type.startsWith('image/')) throw new Error('이미지 파일만 업로드할 수 있습니다')
 
       const uuid = crypto.randomUUID()
-      const storagePath = `images/${roomId}/${widgetId}/${uuid}-${file.name}`
+      const storagePath = `images/${roomId}/${widgetId}/${uuid}-${sanitizeFilename(file.name)}`
 
-      // fake progress ticker
-      let pct = 10
-      onProgress(pct)
-      const ticker = setInterval(() => {
-        pct = Math.min(pct + 5, 90)
-        onProgress(pct)
-      }, 200)
-
+      onProgress(0)
       try {
-        const { error: uploadErr } = await supabase.storage
-          .from('collab-files')
-          .upload(storagePath, file)
-        clearInterval(ticker)
-        if (uploadErr) throw uploadErr
-        onProgress(100)
+        await uploadWithProgress(storagePath, file, onProgress)
 
         const { data: urlData } = supabase.storage
           .from('collab-files')
@@ -1056,7 +1088,6 @@ export const useWidgets = (roomId: string) => {
         }
         return true
       } catch (err) {
-        clearInterval(ticker)
         onProgress(0)
         console.error('Error uploading image:', err)
         setWidgets((prev) =>
@@ -1131,25 +1162,19 @@ export const useWidgets = (roomId: string) => {
       if (!widget || widget.type !== 'music-player') return false
 
       if (file.size > 50 * 1024 * 1024) throw new Error('파일 크기는 50MB 이하여야 합니다')
-      if (!file.type.startsWith('audio/')) throw new Error('오디오 파일만 업로드할 수 있습니다')
+      // MIME 타입 또는 확장자로 오디오 여부 확인 (.m4a는 video/mp4로 잡힐 수 있음)
+      const audioExts = ['.mp3', '.m4a', '.wav', '.ogg', '.aac', '.flac', '.opus', '.mp4']
+      const fileExt = '.' + (file.name.split('.').pop()?.toLowerCase() ?? '')
+      if (!file.type.startsWith('audio/') && !audioExts.includes(fileExt)) {
+        throw new Error('오디오 파일만 업로드할 수 있습니다 (MP3·M4A·WAV·OGG 등)')
+      }
 
       const uuid = crypto.randomUUID()
-      const storagePath = `music/${roomId}/${widgetId}/${uuid}-${file.name}`
+      const storagePath = `music/${roomId}/${widgetId}/${uuid}-${sanitizeFilename(file.name)}`
 
-      let pct = 10
-      onProgress(pct)
-      const ticker = setInterval(() => {
-        pct = Math.min(pct + 5, 90)
-        onProgress(pct)
-      }, 200)
-
+      onProgress(0)
       try {
-        const { error: uploadErr } = await supabase.storage
-          .from('collab-files')
-          .upload(storagePath, file)
-        clearInterval(ticker)
-        if (uploadErr) throw uploadErr
-        onProgress(100)
+        await uploadWithProgress(storagePath, file, onProgress)
 
         const { data: urlData } = supabase.storage
           .from('collab-files')
@@ -1190,7 +1215,6 @@ export const useWidgets = (roomId: string) => {
         }
         return true
       } catch (err) {
-        clearInterval(ticker)
         onProgress(0)
         console.error('Error uploading track:', err)
         setWidgets((prev) =>
