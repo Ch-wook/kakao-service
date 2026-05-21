@@ -9,21 +9,41 @@ import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, Mem
 const sanitizeFilename = (name: string): string =>
   name.replace(/[^\w.\-]/g, '_').replace(/_{2,}/g, '_')
 
-// XHR 기반 실제 progress 업로드 (Supabase Storage REST API 직접 호출)
+// XHR 기반 실제 progress 업로드
+// 세션 토큰이 없으면 Supabase 클라이언트로 fallback (토큰 자동 관리)
 const uploadWithProgress = async (
   storagePath: string,
   file: File,
   onProgress: (pct: number) => void
 ): Promise<void> => {
   const { data: { session } } = await supabase.auth.getSession()
-  const token = session?.access_token ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+  if (!session?.access_token) {
+    // 세션 없음 → Supabase 클라이언트 사용 (내부적으로 anon key 자동 처리)
+    let pct = 5
+    onProgress(pct)
+    const ticker = setInterval(() => { pct = Math.min(pct + 3, 90); onProgress(pct) }, 300)
+    try {
+      const { error } = await supabase.storage.from('collab-files').upload(storagePath, file)
+      clearInterval(ticker)
+      if (error) throw error
+      onProgress(100)
+    } catch (err) {
+      clearInterval(ticker)
+      onProgress(0)
+      throw err
+    }
+    return
+  }
+
+  // 세션 토큰으로 XHR 업로드 (실제 progress)
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const encodedPath = storagePath.split('/').map(encodeURIComponent).join('/')
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', `${supabaseUrl}/storage/v1/object/collab-files/${encodedPath}`)
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`)
     xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
     xhr.setRequestHeader('x-upsert', 'false')
 
