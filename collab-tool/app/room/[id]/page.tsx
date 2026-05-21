@@ -41,6 +41,7 @@ export default function RoomPage() {
   const [hasJoined, setHasJoined] = useState(false)
   const [activeSection, setActiveSection] = useState<ActiveSection>('widgets')
   const [activeCustomTab, setActiveCustomTab] = useState<string | null>(null)
+  const [activeWidgetType, setActiveWidgetType] = useState<string | null>(null)
   const [addingTab, setAddingTab] = useState(false)
   const [newTabName, setNewTabName] = useState('')
   const [isCreatingLedger, setIsCreatingLedger] = useState(false)
@@ -84,10 +85,24 @@ export default function RoomPage() {
   const scheduleWidget = widgets.find((w) => w.type === 'schedule')
   const noticeWidget = widgets.find((w) => w.type === 'notice')
   const noticeData = noticeWidget?.data as { content?: string; updated_at?: string; updated_by?: string } | undefined
+  const WIDGET_TYPES = [
+    { type: 'checklist',     label: '체크리스트', emoji: '✅' },
+    { type: 'expense',       label: '정산',       emoji: '💰' },
+    { type: 'member',        label: '멤버',       emoji: '👥' },
+    { type: 'fee',           label: '납부',       emoji: '💳' },
+    { type: 'memo',          label: '메모',       emoji: '📝' },
+    { type: 'image-gallery', label: '갤러리',     emoji: '🖼️' },
+    { type: 'music-player',  label: '음악',       emoji: '🎵' },
+  ] as const
+
   const displayWidgets = widgets.filter((w) => w.type !== 'ledger' && w.type !== 'schedule' && w.type !== 'tab-config' && w.type !== 'notice')
-  const filteredWidgets = activeCustomTab === null
-    ? displayWidgets
-    : displayWidgets.filter((w) => w.tab_id === activeCustomTab)
+  const filteredWidgets = activeWidgetType !== null
+    ? displayWidgets.filter((w) => w.type === activeWidgetType)
+    : activeCustomTab !== null
+      ? displayWidgets.filter((w) => w.tab_id === activeCustomTab)
+      : displayWidgets
+
+  const activeTypeInfo = WIDGET_TYPES.find((t) => t.type === activeWidgetType) ?? null
 
   // 방 정보 조회
   useEffect(() => {
@@ -348,29 +363,55 @@ export default function RoomPage() {
         </div>
       </header>
 
-      {/* ── 탭 바 ── */}
-      <div className="flex-none flex bg-white border-b border-gray-100 overflow-x-auto scrollbar-hide">
-        {/* 전체 탭 */}
+      {/* ── 통합 탭 바 (단일 스크롤 행) ── */}
+      <div className="flex-none flex bg-white border-b border-gray-200 overflow-x-auto scrollbar-hide">
+        {/* 전체 */}
         <button
-          onClick={() => { setActiveSection('widgets'); setActiveCustomTab(null) }}
-          className={`flex-none px-4 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors ${
-            activeSection === 'widgets' && activeCustomTab === null
+          onClick={() => { setActiveSection('widgets'); setActiveWidgetType(null); setActiveCustomTab(null) }}
+          className={`flex-none px-4 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
+            activeSection === 'widgets' && activeWidgetType === null && activeCustomTab === null
               ? 'text-blue-600 border-blue-500'
-              : 'text-gray-400 border-transparent'
+              : 'text-gray-500 border-transparent'
           }`}
         >
           전체
         </button>
 
+        {/* 위젯 타입 탭 */}
+        {WIDGET_TYPES.map((opt) => {
+          const count = displayWidgets.filter((w) => w.type === opt.type).length
+          const isActive = activeSection === 'widgets' && activeWidgetType === opt.type
+          return (
+            <button
+              key={opt.type}
+              onClick={() => { setActiveSection('widgets'); setActiveWidgetType(opt.type); setActiveCustomTab(null) }}
+              className={`flex-none flex items-center gap-1 px-3 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
+                isActive ? 'text-blue-600 border-blue-500' : 'text-gray-500 border-transparent'
+              }`}
+            >
+              <span className="text-sm">{opt.emoji}</span>
+              <span>{opt.label}</span>
+              {count > 0 && (
+                <span className={`text-[10px] font-semibold px-1 rounded-full ${isActive ? 'text-blue-500' : 'text-gray-400'}`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
+
+        {/* 구분선 */}
+        {tabs.length > 0 && <div className="flex-none w-px bg-gray-100 my-2 mx-1" />}
+
         {/* 커스텀 탭 */}
         {tabs.map((tab) => (
-          <div key={tab.id} className="flex-none flex items-center group">
+          <div key={tab.id} className="flex-none flex items-center">
             <button
-              onClick={() => { setActiveSection('widgets'); setActiveCustomTab(tab.id) }}
-              className={`px-3 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors ${
+              onClick={() => { setActiveSection('widgets'); setActiveWidgetType(null); setActiveCustomTab(tab.id) }}
+              className={`px-3 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
                 activeSection === 'widgets' && activeCustomTab === tab.id
                   ? 'text-blue-600 border-blue-500'
-                  : 'text-gray-400 border-transparent'
+                  : 'text-gray-500 border-transparent'
               }`}
             >
               {tab.name}
@@ -380,15 +421,15 @@ export default function RoomPage() {
                 if (activeCustomTab === tab.id) setActiveCustomTab(null)
                 deleteTab(tab.id)
               }}
-              className="p-1 -ml-1 text-gray-200 hover:text-red-400 active:text-red-500 transition-colors"
+              className="p-1 -ml-1.5 text-gray-200 active:text-red-400 transition-colors"
               aria-label={`${tab.name} 탭 삭제`}
             >
-              <X size={11} />
+              <X size={10} />
             </button>
           </div>
         ))}
 
-        {/* 탭 추가 */}
+        {/* 커스텀 탭 추가 */}
         {addingTab ? (
           <div className="flex-none flex items-center px-2 gap-1">
             <input
@@ -414,32 +455,36 @@ export default function RoomPage() {
         ) : (
           <button
             onClick={() => setAddingTab(true)}
-            className="flex-none px-3 py-2.5 text-gray-300 hover:text-blue-400 active:text-blue-500 transition-colors"
-            aria-label="탭 추가"
+            className="flex-none px-2.5 py-2.5 text-gray-300 active:text-blue-400 transition-colors"
+            aria-label="그룹 탭 추가"
           >
-            <Plus size={15} />
+            <Plus size={14} />
           </button>
         )}
 
-        {/* 일정·장부 탭 — 오른쪽 끝 */}
-        <div className="flex-1" />
+        {/* 구분선 */}
+        <div className="flex-none w-px bg-gray-100 my-2 mx-1" />
+
+        {/* 일정 */}
         <button
-          onClick={() => setActiveSection('schedule')}
-          className={`flex-none flex items-center gap-1 px-3 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors ${
+          onClick={() => { setActiveSection('schedule'); setActiveWidgetType(null) }}
+          className={`flex-none flex items-center gap-1 px-3 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
             activeSection === 'schedule'
               ? 'text-emerald-600 border-emerald-500'
-              : 'text-gray-400 border-transparent'
+              : 'text-gray-500 border-transparent'
           }`}
         >
           <CalendarDays size={13} />
           일정
         </button>
+
+        {/* 장부 */}
         <button
-          onClick={() => setActiveSection('ledger')}
-          className={`flex-none flex items-center gap-1 px-3 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors ${
+          onClick={() => { setActiveSection('ledger'); setActiveWidgetType(null) }}
+          className={`flex-none flex items-center gap-1 px-3 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
             activeSection === 'ledger'
               ? 'text-violet-600 border-violet-500'
-              : 'text-gray-400 border-transparent'
+              : 'text-gray-500 border-transparent'
           }`}
         >
           <BookOpen size={13} />
@@ -466,43 +511,6 @@ export default function RoomPage() {
         )
       )}
 
-      {/* ── 위젯 추가 탭 바 — widgets 탭일 때만 ── */}
-      {activeSection === 'widgets' && (
-        <div className="flex-none flex overflow-x-auto scrollbar-hide bg-white border-b border-gray-200">
-          {([
-            { type: 'checklist',     label: '체크리스트', emoji: '✅' },
-            { type: 'expense',       label: '정산',       emoji: '💰' },
-            { type: 'member',        label: '멤버',       emoji: '👥' },
-            { type: 'fee',           label: '납부',       emoji: '💳' },
-            { type: 'memo',          label: '메모',       emoji: '📝' },
-            { type: 'image-gallery', label: '갤러리',     emoji: '🖼️' },
-            { type: 'music-player',  label: '음악',       emoji: '🎵' },
-          ] as const).map((opt) => (
-            <button
-              key={opt.type}
-              onClick={async () => {
-                if (addingWidgetType) return
-                setAddingWidgetType(opt.type)
-                await handleCreateWidget(opt.type, opt.label)
-                setAddingWidgetType(null)
-              }}
-              disabled={!!addingWidgetType}
-              className={`flex-none flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors disabled:opacity-40 ${
-                addingWidgetType === opt.type
-                  ? 'text-blue-600 border-blue-500'
-                  : 'text-gray-500 border-transparent active:text-blue-600 active:border-blue-400'
-              }`}
-            >
-              {addingWidgetType === opt.type ? (
-                <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin flex-none" />
-              ) : (
-                <span className="text-sm">{opt.emoji}</span>
-              )}
-              <span>{opt.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* ── 위젯 탭 ── */}
       {activeSection === 'widgets' && (
@@ -532,17 +540,45 @@ export default function RoomPage() {
                   ))}
                 </div>
               ) : filteredWidgets.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-14 text-center">
-                  <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mb-3">
-                    <LayoutGrid size={22} className="text-blue-400" />
+                /* 빈 상태 */
+                activeTypeInfo ? (
+                  /* 타입 탭 선택 + 위젯 없음 → 큰 추가 버튼 */
+                  <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+                    <span className="text-5xl">{activeTypeInfo.emoji}</span>
+                    <p className="text-sm font-semibold text-gray-700">
+                      {activeTypeInfo.label} 위젯이 없어요
+                    </p>
+                    <p className="text-xs text-gray-400">아래 버튼으로 첫 번째를 추가해보세요</p>
+                    <button
+                      onClick={async () => {
+                        if (addingWidgetType) return
+                        setAddingWidgetType(activeTypeInfo.type)
+                        await handleCreateWidget(activeTypeInfo.type, activeTypeInfo.label)
+                        setAddingWidgetType(null)
+                      }}
+                      disabled={!!addingWidgetType}
+                      className="flex items-center gap-2 mt-1 px-6 py-3 bg-blue-500 text-white rounded-2xl text-sm font-semibold active:bg-blue-600 disabled:opacity-50 shadow-md shadow-blue-100"
+                    >
+                      {addingWidgetType === activeTypeInfo.type
+                        ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        : <Plus size={16} />}
+                      {activeTypeInfo.label} 추가
+                    </button>
                   </div>
-                  <p className="text-sm font-semibold text-gray-700 mb-1">
-                    {activeCustomTab ? '이 탭에 위젯이 없어요' : '아직 위젯이 없어요'}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    위쪽 위젯 버튼으로 추가해보세요
-                  </p>
-                </div>
+                ) : (
+                  /* 전체/커스텀 탭 + 위젯 없음 */
+                  <div className="flex flex-col items-center justify-center py-14 text-center">
+                    <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mb-3">
+                      <LayoutGrid size={22} className="text-blue-400" />
+                    </div>
+                    <p className="text-sm font-semibold text-gray-700 mb-1">
+                      {activeCustomTab ? '이 탭에 위젯이 없어요' : '아직 위젯이 없어요'}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      위쪽 탭에서 위젯 종류를 선택해 추가해보세요
+                    </p>
+                  </div>
+                )
               ) : (
                 filteredWidgets.map((widget) => {
                   if (widget.type === 'checklist') {
@@ -643,6 +679,25 @@ export default function RoomPage() {
                     </div>
                   )
                 })
+              )}
+
+              {/* 타입 탭에서 위젯 있을 때 하단 추가 버튼 */}
+              {activeTypeInfo && filteredWidgets.length > 0 && !widgetsLoading && (
+                <button
+                  onClick={async () => {
+                    if (addingWidgetType) return
+                    setAddingWidgetType(activeTypeInfo.type)
+                    await handleCreateWidget(activeTypeInfo.type, activeTypeInfo.label)
+                    setAddingWidgetType(null)
+                  }}
+                  disabled={!!addingWidgetType}
+                  className="w-full flex items-center justify-center gap-2 py-3 mt-1 rounded-2xl border-2 border-dashed border-gray-200 text-sm text-gray-400 font-medium active:border-blue-300 active:text-blue-500 disabled:opacity-40 transition-colors"
+                >
+                  {addingWidgetType === activeTypeInfo.type
+                    ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    : <Plus size={15} />}
+                  {activeTypeInfo.label} 추가
+                </button>
               )}
             </div>
           </main>
