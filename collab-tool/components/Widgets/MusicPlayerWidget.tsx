@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Play, Pause, SkipBack, SkipForward,
-  Trash2, Upload, X, Music, Check,
+  Trash2, Upload, X, Music, Check, Download,
 } from 'lucide-react'
 import { getRelativeTime } from '@/lib/utils'
 import type { Widget, MusicTrack } from '@/types'
@@ -51,8 +51,32 @@ export default function MusicPlayerWidget({
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [savingId, setSavingId] = useState<string | null>(null)
 
   const audioRef = useRef<HTMLAudioElement>(null)
+
+  const handleSaveTrack = useCallback(async (track: MusicTrack) => {
+    if (savingId) return
+    setSavingId(track.id)
+    try {
+      const response = await fetch(track.url)
+      const blob = await response.blob()
+
+      // 오디오 파일은 Web Share Files API가 지원되지 않는 경우 많으므로 blob 다운로드 우선
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = track.originalFilename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(blobUrl)
+    } catch {
+      window.open(track.url, '_blank')
+    } finally {
+      setSavingId(null)
+    }
+  }, [savingId])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
 
@@ -352,6 +376,18 @@ export default function MusicPlayerWidget({
                   {track.uploaderNickname ?? '익명'} · {getRelativeTime(track.uploadedAt)}
                 </p>
               </div>
+
+              {/* 저장 버튼 */}
+              <button
+                onClick={() => handleSaveTrack(track)}
+                disabled={!!savingId}
+                className="flex-none p-1.5 text-gray-300 active:text-blue-400 rounded-lg transition-colors disabled:opacity-40"
+                aria-label="트랙 저장"
+              >
+                {savingId === track.id
+                  ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin block" />
+                  : <Download size={13} />}
+              </button>
 
               {/* 삭제 버튼 */}
               {confirmDeleteId === track.id ? (

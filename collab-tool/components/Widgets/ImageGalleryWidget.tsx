@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { Image as ImageIcon, Upload, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { Image as ImageIcon, Upload, X, ChevronLeft, ChevronRight, Trash2, Download } from 'lucide-react'
 import { getRelativeTime } from '@/lib/utils'
 import type { Widget, GalleryImage } from '@/types'
 
@@ -32,7 +32,41 @@ export default function ImageGalleryWidget({
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [savingId, setSavingId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleSaveImage = useCallback(async (img: GalleryImage) => {
+    if (savingId) return
+    setSavingId(img.id)
+    try {
+      const response = await fetch(img.url)
+      const blob = await response.blob()
+
+      // iOS: Web Share API로 사진 앱에 저장
+      if (navigator.share) {
+        const file = new File([blob], img.filename, { type: blob.type || 'image/jpeg' })
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: img.filename })
+          return
+        }
+      }
+
+      // Android/PC: blob URL 다운로드
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = img.filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(blobUrl)
+    } catch {
+      // 최종 fallback: 새 탭에서 열기
+      window.open(img.url, '_blank')
+    } finally {
+      setSavingId(null)
+    }
+  }, [savingId])
 
   const handleFiles = useCallback(
     async (files: FileList) => {
@@ -160,6 +194,17 @@ export default function ImageGalleryWidget({
                   {img.uploaderNickname ?? '익명'}
                 </p>
               </div>
+              {/* 저장 버튼 (좌상단) */}
+              <button
+                onClick={(e) => { e.stopPropagation(); handleSaveImage(img) }}
+                className="absolute top-1 left-1 p-1 bg-black/30 text-white rounded-md opacity-0 group-active:opacity-100 transition-opacity"
+                aria-label="이미지 저장"
+              >
+                {savingId === img.id
+                  ? <span className="w-2.5 h-2.5 border border-white border-t-transparent rounded-full animate-spin block" />
+                  : <Download size={11} />}
+              </button>
+
               {/* 삭제 버튼 */}
               {confirmDeleteId === img.id ? (
                 <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1.5">
@@ -243,21 +288,31 @@ export default function ImageGalleryWidget({
             className="flex items-center justify-between px-4 py-3 flex-none"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-white/60 text-xs">
+            <p className="text-white/60 text-xs flex-none">
               {lightboxIndex + 1} / {images.length}
             </p>
-            <div className="text-center flex-1">
-              <p className="text-white/80 text-xs truncate max-w-[160px] mx-auto">
-                {images[lightboxIndex].filename}
-              </p>
+            <p className="text-white/80 text-xs truncate mx-3 flex-1 text-center">
+              {images[lightboxIndex].filename}
+            </p>
+            <div className="flex items-center gap-1 flex-none">
+              <button
+                onClick={() => handleSaveImage(images[lightboxIndex])}
+                disabled={!!savingId}
+                className="p-2 text-white/70 active:text-white rounded-lg disabled:opacity-40"
+                aria-label="저장"
+              >
+                {savingId === images[lightboxIndex].id
+                  ? <span className="w-4 h-4 border-2 border-white/70 border-t-transparent rounded-full animate-spin block" />
+                  : <Download size={18} />}
+              </button>
+              <button
+                onClick={() => setLightboxIndex(null)}
+                className="p-2 text-white/60 active:text-white rounded-lg"
+                aria-label="닫기"
+              >
+                <X size={20} />
+              </button>
             </div>
-            <button
-              onClick={() => setLightboxIndex(null)}
-              className="p-1.5 text-white/60 active:text-white rounded-lg"
-              aria-label="닫기"
-            >
-              <X size={20} />
-            </button>
           </div>
 
           {/* 이미지 영역 */}
