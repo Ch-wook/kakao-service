@@ -80,6 +80,9 @@ export default function RoomPage() {
     updateTrackName,
   } = useWidgets(roomId)
 
+  // 닉네임 기준 유니크 참여자 수 (같은 사람이 여러 기기로 접속해도 1명으로 카운트)
+  const uniqueParticipantCount = new Set(participants.map((p) => p.nickname)).size
+
   // 장부·일정·공지·탭설정 위젯 제외한 일반 위젯
   const ledgerWidget = widgets.find((w) => w.type === 'ledger')
   const scheduleWidget = widgets.find((w) => w.type === 'schedule')
@@ -343,7 +346,7 @@ export default function RoomPage() {
               </h1>
               <div className="flex items-center gap-1 text-[10px] text-gray-400">
                 <Users size={9} />
-                <span>{participants.length}명</span>
+                <span>{uniqueParticipantCount}명</span>
                 {currentParticipant && (
                   <span className="text-blue-400">• {currentParticipant.nickname}</span>
                 )}

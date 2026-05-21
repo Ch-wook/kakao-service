@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Plus, CheckCircle2, Zap, Wallet } from 'lucide-react'
+import { Plus } from 'lucide-react'
 
 export default function Home() {
   return (
@@ -78,27 +78,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 기능 소개 */}
-        <div>
-          <h3 className="text-sm font-semibold text-gray-500 mb-4 text-center">지원하는 위젯</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white rounded-2xl border border-gray-100 p-4">
-              <CheckCircle2 size={20} className="text-blue-500 mb-2" />
-              <p className="text-sm font-semibold text-gray-800">체크리스트</p>
-              <p className="text-xs text-gray-400 mt-0.5">준비물, 할 일 관리</p>
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-100 p-4">
-              <Wallet size={20} className="text-emerald-500 mb-2" />
-              <p className="text-sm font-semibold text-gray-800">정산 (N빵)</p>
-              <p className="text-xs text-gray-400 mt-0.5">1인당 금액 자동 계산</p>
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-100 p-4 col-span-2">
-              <Zap size={20} className="text-amber-500 mb-2" />
-              <p className="text-sm font-semibold text-gray-800">실시간 동기화</p>
-              <p className="text-xs text-gray-400 mt-0.5">모든 변경사항이 즉시 모두에게 반영돼요</p>
-            </div>
-          </div>
-        </div>
       </main>
 
       {/* Footer */}
