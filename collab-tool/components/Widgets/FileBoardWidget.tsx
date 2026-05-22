@@ -59,7 +59,6 @@ export default function FileBoardWidget({
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-  const [savingId, setSavingId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dragCounter = useRef(0)
@@ -109,26 +108,16 @@ export default function FileBoardWidget({
     e.target.value = ''
   }
 
-  const handleDownload = useCallback(async (file: SharedFile) => {
-    if (savingId) return
-    setSavingId(file.id)
-    try {
-      const response = await fetch(file.url)
-      const blob = await response.blob()
-      const blobUrl = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = blobUrl
-      a.download = file.filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(blobUrl)
-    } catch {
-      window.open(file.url, '_blank')
-    } finally {
-      setSavingId(null)
-    }
-  }, [savingId])
+  const handleDownload = (file: SharedFile) => {
+    const params = new URLSearchParams({ url: file.url, name: file.filename })
+    const a = document.createElement('a')
+    a.href = `/api/download?${params}`
+    a.download = file.filename
+    a.style.display = 'none'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
 
   return (
     <div
@@ -200,13 +189,10 @@ export default function FileBoardWidget({
                 {/* 다운로드 버튼 */}
                 <button
                   onClick={() => handleDownload(file)}
-                  disabled={!!savingId}
-                  className="flex-none p-1.5 text-gray-300 active:text-blue-500 rounded-lg transition-colors disabled:opacity-40"
+                  className="flex-none p-1.5 text-gray-300 active:text-blue-500 rounded-lg transition-colors"
                   aria-label="다운로드"
                 >
-                  {savingId === file.id
-                    ? <span className="w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin block" />
-                    : <Download size={15} />}
+                  <Download size={15} />
                 </button>
 
                 {/* 삭제 버튼 */}

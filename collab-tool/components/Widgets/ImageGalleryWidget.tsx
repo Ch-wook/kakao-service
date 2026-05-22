@@ -32,7 +32,6 @@ export default function ImageGalleryWidget({
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
-  const [savingId, setSavingId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dragCounter = useRef(0)
   const inputId = useId()
@@ -47,38 +46,16 @@ export default function ImageGalleryWidget({
     if (dragCounter.current === 0) setIsDragging(false)
   }
 
-  const handleSaveImage = useCallback(async (img: GalleryImage) => {
-    if (savingId) return
-    setSavingId(img.id)
-    try {
-      const response = await fetch(img.url)
-      const blob = await response.blob()
-
-      // iOS: Web Share API로 사진 앱에 저장
-      if (navigator.share) {
-        const file = new File([blob], img.filename, { type: blob.type || 'image/jpeg' })
-        if (navigator.canShare?.({ files: [file] })) {
-          await navigator.share({ files: [file], title: img.filename })
-          return
-        }
-      }
-
-      // Android/PC: blob URL 다운로드
-      const blobUrl = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = blobUrl
-      a.download = img.filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(blobUrl)
-    } catch {
-      // 최종 fallback: 새 탭에서 열기
-      window.open(img.url, '_blank')
-    } finally {
-      setSavingId(null)
-    }
-  }, [savingId])
+  const handleSaveImage = (img: GalleryImage) => {
+    const params = new URLSearchParams({ url: img.url, name: img.filename })
+    const a = document.createElement('a')
+    a.href = `/api/download?${params}`
+    a.download = img.filename
+    a.style.display = 'none'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
 
   const handleFiles = useCallback(
     async (files: FileList) => {
@@ -215,9 +192,7 @@ export default function ImageGalleryWidget({
                 className="absolute top-1 left-1 p-1 bg-black/30 text-white rounded-md opacity-0 group-active:opacity-100 transition-opacity"
                 aria-label="이미지 저장"
               >
-                {savingId === img.id
-                  ? <span className="w-2.5 h-2.5 border border-white border-t-transparent rounded-full animate-spin block" />
-                  : <Download size={11} />}
+                <Download size={11} />
               </button>
 
               {/* 삭제 버튼 */}
@@ -314,13 +289,10 @@ export default function ImageGalleryWidget({
             <div className="flex items-center gap-1 flex-none">
               <button
                 onClick={() => handleSaveImage(images[lightboxIndex])}
-                disabled={!!savingId}
-                className="p-2 text-white/70 active:text-white rounded-lg disabled:opacity-40"
+                className="p-2 text-white/70 active:text-white rounded-lg"
                 aria-label="저장"
               >
-                {savingId === images[lightboxIndex].id
-                  ? <span className="w-4 h-4 border-2 border-white/70 border-t-transparent rounded-full animate-spin block" />
-                  : <Download size={18} />}
+                <Download size={18} />
               </button>
               <button
                 onClick={() => setLightboxIndex(null)}
