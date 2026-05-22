@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useId } from 'react'
 import {
   Paperclip, Upload, X, Trash2, Download,
   FileText, FileImage, FileVideo, FileAudio,
@@ -62,6 +62,24 @@ export default function FileBoardWidget({
   const [savingId, setSavingId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dragCounter = useRef(0)
+  const inputId = useId()
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounter.current++
+    if (dragCounter.current === 1) setIsDragging(true)
+  }
+  const handleDragLeave = () => {
+    dragCounter.current--
+    if (dragCounter.current === 0) setIsDragging(false)
+  }
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounter.current = 0
+    setIsDragging(false)
+    if (e.dataTransfer.files) await handleFiles(e.dataTransfer.files)
+  }
 
   const handleFiles = useCallback(
     async (fileList: FileList) => {
@@ -91,12 +109,6 @@ export default function FileBoardWidget({
     e.target.value = ''
   }
 
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-    if (e.dataTransfer.files) await handleFiles(e.dataTransfer.files)
-  }
-
   const handleDownload = useCallback(async (file: SharedFile) => {
     if (savingId) return
     setSavingId(file.id)
@@ -119,7 +131,15 @@ export default function FileBoardWidget({
   }, [savingId])
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div
+      className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-colors ${
+        isDragging ? 'border-blue-400 ring-2 ring-blue-200' : 'border-gray-100'
+      }`}
+      onDragOver={(e) => e.preventDefault()}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {/* 헤더 */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
         <div className="flex items-center gap-2 min-w-0">
@@ -140,30 +160,26 @@ export default function FileBoardWidget({
         </button>
       </div>
 
+      {/* 드래그 오버레이 안내 */}
+      {isDragging && (
+        <div className="mx-3 my-2 rounded-xl border-2 border-blue-400 bg-blue-50 flex flex-col items-center justify-center py-5 gap-1 pointer-events-none">
+          <Upload size={22} className="text-blue-400" />
+          <p className="text-sm text-blue-500 font-semibold">놓으면 업로드됩니다</p>
+        </div>
+      )}
+
       {/* 빈 상태 */}
-      {files.length === 0 && uploadProgress === null && (
-        <div
-          className={`mx-3 my-3 rounded-xl border-2 border-dashed transition-colors flex flex-col items-center justify-center py-8 gap-2 ${
-            isDragging ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50/50'
-          }`}
-          onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-        >
+      {files.length === 0 && uploadProgress === null && !isDragging && (
+        <div className="mx-3 my-3 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50 flex flex-col items-center justify-center py-8 gap-2">
           <Paperclip size={28} className="text-gray-300" />
           <p className="text-sm text-gray-400 font-medium">파일을 업로드해보세요</p>
-          <p className="text-xs text-gray-300">모든 형식 지원 · 최대 100MB</p>
+          <p className="text-xs text-gray-300">모든 형식 지원 · 최대 100MB · 드래그 앤 드롭 가능</p>
         </div>
       )}
 
       {/* 파일 목록 */}
-      {files.length > 0 && (
-        <div
-          className="divide-y divide-gray-50"
-          onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-        >
+      {files.length > 0 && !isDragging && (
+        <div className="divide-y divide-gray-50">
           {files.map((file) => {
             const { Icon, color, bg } = getFileIcon(file.filename, file.mimeType)
             return (
@@ -241,21 +257,23 @@ export default function FileBoardWidget({
       {/* 업로드 버튼 */}
       <div className="px-4 py-3 border-t border-gray-50 flex items-center gap-2">
         <input
-          ref={fileInputRef}
+          id={inputId}
           type="file"
           multiple
           className="hidden"
           onChange={handleFileChange}
-        />
-        <button
-          onClick={() => fileInputRef.current?.click()}
           disabled={uploadProgress !== null}
-          className="flex items-center gap-1.5 text-sm text-blue-500 font-semibold disabled:opacity-40 disabled:cursor-not-allowed active:text-blue-700 transition-colors"
+        />
+        <label
+          htmlFor={inputId}
+          className={`flex items-center gap-1.5 text-sm text-blue-500 font-semibold cursor-pointer transition-colors active:text-blue-700 ${
+            uploadProgress !== null ? 'opacity-40 pointer-events-none' : ''
+          }`}
         >
           <Upload size={14} />
           파일 추가
-        </button>
-        <span className="text-xs text-gray-300">· 여러 파일 동시 업로드 가능</span>
+        </label>
+        <span className="text-xs text-gray-300">· 드래그 앤 드롭도 가능</span>
       </div>
     </div>
   )

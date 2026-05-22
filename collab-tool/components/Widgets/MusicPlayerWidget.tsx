@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useId } from 'react'
 import {
   Play, Pause, SkipBack, SkipForward,
   Trash2, Upload, X, Music, Check, Download,
@@ -79,6 +79,7 @@ export default function MusicPlayerWidget({
   }, [savingId])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
+  const inputId = useId()
 
   // ── 언마운트 시 오디오 정리 ──────────────────────────────
   useEffect(() => {
@@ -443,20 +444,22 @@ export default function MusicPlayerWidget({
       {/* 업로드 버튼 */}
       <div className="px-4 py-3 border-t border-gray-50 flex items-center gap-2">
         <input
-          ref={fileInputRef}
+          id={inputId}
           type="file"
           accept=".mp3,.m4a,.wav,.ogg,audio/*"
           className="hidden"
           onChange={handleFileChange}
-        />
-        <button
-          onClick={() => fileInputRef.current?.click()}
           disabled={uploadProgress !== null}
-          className="flex items-center gap-1.5 text-sm text-blue-500 font-semibold disabled:opacity-40 disabled:cursor-not-allowed active:text-blue-700 transition-colors"
+        />
+        <label
+          htmlFor={inputId}
+          className={`flex items-center gap-1.5 text-sm text-blue-500 font-semibold cursor-pointer transition-colors active:text-blue-700 ${
+            uploadProgress !== null ? 'opacity-40 pointer-events-none' : ''
+          }`}
         >
           <Upload size={14} />
           음악 추가
-        </button>
+        </label>
         <span className="text-xs text-gray-300">· 트랙명 더블탭으로 수정</span>
       </div>
     </div>
