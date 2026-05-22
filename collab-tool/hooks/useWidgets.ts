@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { generateId, getCurrentTimestamp } from '@/lib/utils'
-import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, ScheduleData, MemoData, NoticeData, TabConfig, TabConfigData, ImageGalleryData, GalleryImage, MusicPlayerData, MusicTrack } from '@/types'
+import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, ScheduleData, MemoData, NoticeData, TabConfig, TabConfigData, ImageGalleryData, GalleryImage, MusicPlayerData, MusicTrack, FileBoardData, SharedFile } from '@/types'
 
 // 파일명 특수문자 제거 (Storage 경로 안전화)
 const sanitizeFilename = (name: string): string =>
@@ -115,6 +115,12 @@ const asNotice = (data: Record<string, unknown>): NoticeData =>
   data as unknown as NoticeData
 
 const fromNotice = (data: NoticeData): Record<string, unknown> =>
+  data as unknown as Record<string, unknown>
+
+const asFileBoard = (data: Record<string, unknown>): FileBoardData =>
+  data as unknown as FileBoardData
+
+const fromFileBoard = (data: FileBoardData): Record<string, unknown> =>
   data as unknown as Record<string, unknown>
 
 const asGallery = (data: Record<string, unknown>): ImageGalleryData =>
@@ -251,6 +257,7 @@ export const useWidgets = (roomId: string) => {
           notice: { content: '' },
           'image-gallery': { images: [] },
           'music-player': { tracks: [] },
+          'file-board': { files: [] },
         }
         const defaultData = defaultDataMap[type] ?? {}
 
@@ -1337,6 +1344,121 @@ export const useWidgets = (roomId: string) => {
     [widgets]
   )
 
+  // ─────────────────────────────────────────────
+  // 파일 보드: 파일 업로드
+  // ─────────────────────────────────────────────
+  const uploadFile = useCallback(
+    async (
+      widgetId: string,
+      file: File,
+      nickname: string | undefined,
+      onProgress: (pct: number) => void
+    ): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'file-board') return false
+
+      if (file.size > 100 * 1024 * 1024) throw new Error('파일 크기는 100MB 이하여야 합니다')
+
+      const uuid = crypto.randomUUID()
+      const storagePath = `files/${roomId}/${widgetId}/${uuid}-${sanitizeFilename(file.name)}`
+
+      onProgress(0)
+      try {
+        await uploadWithProgress(storagePath, file, onProgress)
+
+        const { data: urlData } = supabase.storage
+          .from('collab-files')
+          .getPublicUrl(storagePath)
+
+        const newFile: SharedFile = {
+          id: generateId(),
+          url: urlData.publicUrl,
+          storagePath,
+          filename: file.name,
+          size: file.size,
+          mimeType: file.type || 'application/octet-stream',
+          uploaderNickname: nickname,
+          uploadedAt: getCurrentTimestamp(),
+        }
+
+        const currentData = asFileBoard(widget.data)
+        const updatedData: FileBoardData = {
+          files: [...(currentData.files || []), newFile],
+        }
+
+        optimisticUpdates.current.add(widgetId)
+        setWidgets((prev) =>
+          prev.map((w) =>
+            w.id === widgetId ? { ...w, data: fromFileBoard(updatedData) } : w
+          )
+        )
+
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: updatedData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+
+        if (err) {
+          await supabase.storage.from('collab-files').remove([storagePath])
+          throw err
+        }
+        return true
+      } catch (err) {
+        onProgress(0)
+        console.error('Error uploading file:', err)
+        setWidgets((prev) => prev.map((w) => (w.id === widgetId ? widget : w)))
+        throw err
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [roomId, widgets]
+  )
+
+  // ─────────────────────────────────────────────
+  // 파일 보드: 파일 삭제
+  // ─────────────────────────────────────────────
+  const deleteFile = useCallback(
+    async (widgetId: string, fileId: string): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'file-board') return false
+
+      const currentData = asFileBoard(widget.data)
+      const file = currentData.files?.find((f) => f.id === fileId)
+      if (!file) return false
+
+      const updatedData: FileBoardData = {
+        files: (currentData.files || []).filter((f) => f.id !== fileId),
+      }
+
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) =>
+          w.id === widgetId ? { ...w, data: fromFileBoard(updatedData) } : w
+        )
+      )
+
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: updatedData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+        if (err) throw err
+
+        await supabase.storage.from('collab-files').remove([file.storagePath]).catch(console.error)
+        return true
+      } catch (err) {
+        console.error('Error deleting file:', err)
+        setWidgets((prev) => prev.map((w) => (w.id === widgetId ? widget : w)))
+        setError('파일 삭제 중 오류가 발생했습니다')
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [widgets]
+  )
+
   return {
     widgets,
     isLoading,
@@ -1367,5 +1489,7 @@ export const useWidgets = (roomId: string) => {
     uploadTrack,
     deleteTrack,
     updateTrackName,
+    uploadFile,
+    deleteFile,
   }
 }

@@ -32,7 +32,7 @@ export interface NoticeData {
 export interface Widget {
   id: string
   room_id: string
-  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll' | 'member' | 'ledger' | 'fee' | 'tab-config' | 'notice' | 'image-gallery' | 'music-player'
+  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll' | 'member' | 'ledger' | 'fee' | 'tab-config' | 'notice' | 'image-gallery' | 'music-player' | 'file-board'
   title?: string
   data: Record<string, unknown>
   order: number
@@ -210,4 +210,21 @@ export interface MusicTrack {
 
 export interface MusicPlayerData {
   tracks: MusicTrack[]
+}
+
+// ── 파일 공유 보드 ─────────────────────────────────────────
+
+export interface SharedFile {
+  id: string
+  url: string
+  storagePath: string
+  filename: string
+  size: number
+  mimeType: string
+  uploaderNickname?: string
+  uploadedAt: string
+}
+
+export interface FileBoardData {
+  files: SharedFile[]
 }

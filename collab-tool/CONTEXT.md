@@ -120,7 +120,7 @@ kakao-service/
 ALTER TABLE widgets ADD COLUMN IF NOT EXISTS tab_id TEXT;
 ALTER TABLE widgets DROP CONSTRAINT IF EXISTS widgets_type_check;
 ALTER TABLE widgets ADD CONSTRAINT widgets_type_check
-  CHECK (type IN ('checklist','expense','member','vote','memo','schedule','roles','poll','ledger','fee','tab-config','notice','image-gallery','music-player'));
+  CHECK (type IN ('checklist','expense','member','vote','memo','schedule','roles','poll','ledger','fee','tab-config','notice','image-gallery','music-player','file-board'));
 ```
 
 ---
@@ -148,7 +148,7 @@ CREATE POLICY "last_active 업데이트 가능" ON participants FOR UPDATE USING
 -- 위젯 타입 constraint 업데이트 (최신)
 ALTER TABLE widgets DROP CONSTRAINT IF EXISTS widgets_type_check;
 ALTER TABLE widgets ADD CONSTRAINT widgets_type_check
-  CHECK (type IN ('checklist','expense','member','vote','memo','schedule','roles','poll','ledger','fee','tab-config','notice','image-gallery','music-player'));
+  CHECK (type IN ('checklist','expense','member','vote','memo','schedule','roles','poll','ledger','fee','tab-config','notice','image-gallery','music-player','file-board'));
 
 -- Realtime
 ALTER PUBLICATION supabase_realtime ADD TABLE widgets;
