@@ -11,40 +11,96 @@ interface MemoWidgetProps {
   onDeleteWidget: (widgetId: string) => Promise<boolean>
 }
 
+// 기존 일반 텍스트를 HTML로 변환 (하위 호환)
+function plainTextToHtml(text: string): string {
+  if (!text) return ''
+  // 이미 HTML 태그가 포함되어 있으면 그대로 반환
+  if (/<[a-z][\s\S]*?>/i.test(text)) return text
+  // 일반 텍스트 → HTML 이스케이프 + 줄바꿈 변환
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>')
+}
+
+// HTML에서 순수 텍스트 길이 추출
+function getTextLength(html: string): number {
+  if (typeof document === 'undefined') return html.replace(/<[^>]*>/g, '').length
+  const div = document.createElement('div')
+  div.innerHTML = html
+  return (div.innerText || div.textContent || '').length
+}
+
+// 위험한 HTML 요소/속성 제거 (XSS 방지)
+function sanitizeHtml(html: string): string {
+  const div = document.createElement('div')
+  div.innerHTML = html
+  // 위험 요소 제거
+  div.querySelectorAll('script, iframe, object, embed, form, input, button, link, meta').forEach(el => el.remove())
+  // on* 이벤트 핸들러, javascript: URL 제거
+  div.querySelectorAll('*').forEach(el => {
+    Array.from(el.attributes).forEach(attr => {
+      if (attr.name.startsWith('on')) {
+        el.removeAttribute(attr.name)
+      }
+      if ((attr.name === 'href' || attr.name === 'src') && attr.value.trim().toLowerCase().startsWith('javascript:')) {
+        el.removeAttribute(attr.name)
+      }
+    })
+  })
+  return div.innerHTML
+}
+
 export default function MemoWidget({ widget, nickname, onUpdateData, onDeleteWidget }: MemoWidgetProps) {
   const data = widget.data as unknown as MemoData
-  const [content, setContent] = useState(data.content ?? '')
+  const initialHtml = useRef(plainTextToHtml(data.content ?? ''))
+  const [charCount, setCharCount] = useState(() => getTextLength(data.content ?? ''))
   const [savedBy, setSavedBy] = useState(data.saved_by as string | undefined)
   const [savedAt, setSavedAt] = useState(data.updated_at)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSavedContent = useRef(data.content ?? '')
+  const editorRef = useRef<HTMLDivElement>(null)
+  const isLocalEdit = useRef(false) // 로컬 편집 중인지 추적
+
+  // 초기 콘텐츠 설정
+  useEffect(() => {
+    if (editorRef.current && !editorRef.current.innerHTML) {
+      editorRef.current.innerHTML = initialHtml.current
+    }
+  }, [])
 
   // 외부 Realtime 업데이트 반영 (다른 사용자가 수정 시)
   useEffect(() => {
     const incoming = (widget.data as unknown as MemoData).content ?? ''
     if (incoming !== lastSavedContent.current) {
-      setContent(incoming)
+      const newHtml = plainTextToHtml(incoming)
       lastSavedContent.current = incoming
+      setCharCount(getTextLength(incoming))
       setSavedBy((widget.data as Record<string, unknown>).saved_by as string | undefined)
       setSavedAt((widget.data as unknown as MemoData).updated_at)
+      // 로컬 편집 중이 아닐 때만 에디터 내용 교체 (커서 위치 보호)
+      if (!isLocalEdit.current && editorRef.current) {
+        editorRef.current.innerHTML = newHtml
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [widget.data])
 
   const save = useCallback(
-    async (text: string) => {
-      if (text === lastSavedContent.current) return
+    async (html: string) => {
+      if (html === lastSavedContent.current) return
       setSaveState('saving')
       const newData: MemoData & { saved_by?: string } = {
-        content: text,
+        content: html,
         updated_at: new Date().toISOString(),
         saved_by: nickname,
       }
       const ok = await onUpdateData(widget.id, newData)
       if (ok) {
-        lastSavedContent.current = text
+        lastSavedContent.current = html
         setSavedBy(nickname)
         setSavedAt(newData.updated_at)
         setSaveState('saved')
@@ -52,16 +108,86 @@ export default function MemoWidget({ widget, nickname, onUpdateData, onDeleteWid
       } else {
         setSaveState('idle')
       }
+      isLocalEdit.current = false
     },
     [widget.id, nickname, onUpdateData]
   )
 
-  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    const text = e.target.value
-    setContent(text)
+  function handleInput() {
+    if (!editorRef.current) return
+    const html = editorRef.current.innerHTML
+    const textLen = getTextLength(html)
+
+    // 글자 수 제한 체크
+    if (textLen > MAX_CHARS) {
+      // 초과 시 마지막 저장 상태로 되돌리지 않고, 그냥 경고만 표시
+      // (contentEditable에서 잘라내기가 복잡하므로 저장 시 차단)
+    }
+
+    setCharCount(textLen)
+    isLocalEdit.current = true
     setSaveState('idle')
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => save(text), 800)
+    debounceRef.current = setTimeout(() => {
+      if (textLen <= MAX_CHARS) {
+        save(html)
+      }
+    }, 800)
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    e.preventDefault()
+    const html = e.clipboardData.getData('text/html')
+    const text = e.clipboardData.getData('text/plain')
+
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0) return
+
+    const range = selection.getRangeAt(0)
+    range.deleteContents()
+
+    if (html) {
+      // HTML 붙여넣기 — 위험 요소 제거 후 삽입
+      const sanitized = sanitizeHtml(html)
+      const fragment = range.createContextualFragment(sanitized)
+      range.insertNode(fragment)
+      // 커서를 삽입된 콘텐츠 끝으로 이동
+      selection.collapseToEnd()
+    } else if (text) {
+      // 일반 텍스트 — 줄바꿈을 <br>로 변환
+      const lines = text.split('\n')
+      lines.forEach((line, i) => {
+        if (i > 0) {
+          range.insertNode(document.createElement('br'))
+          selection.collapseToEnd()
+        }
+        const textNode = document.createTextNode(line)
+        range.insertNode(textNode)
+        selection.collapseToEnd()
+      })
+    }
+
+    handleInput()
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    // Ctrl+B, Ctrl+I, Ctrl+U 단축키 허용 (브라우저 기본 동작)
+    // 글자수 초과 시 입력 방지 (단, 삭제/선택 키는 허용)
+    if (charCount >= MAX_CHARS) {
+      const allowedKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End']
+      const isModifier = e.ctrlKey || e.metaKey
+      const isSelectAll = isModifier && e.key === 'a'
+      const isCopy = isModifier && e.key === 'c'
+      const isCut = isModifier && e.key === 'x'
+      const isUndo = isModifier && e.key === 'z'
+      const isBold = isModifier && e.key === 'b'
+      const isItalic = isModifier && e.key === 'i'
+      const isUnderline = isModifier && e.key === 'u'
+
+      if (!allowedKeys.includes(e.key) && !isSelectAll && !isCopy && !isCut && !isUndo && !isBold && !isItalic && !isUnderline) {
+        e.preventDefault()
+      }
+    }
   }
 
   function formatSavedAt(iso?: string) {
@@ -75,8 +201,8 @@ export default function MemoWidget({ widget, nickname, onUpdateData, onDeleteWid
     return d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
   }
 
-  const charCount = content.length
   const MAX_CHARS = 3000
+  const isOverLimit = charCount > MAX_CHARS
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
@@ -131,22 +257,35 @@ export default function MemoWidget({ widget, nickname, onUpdateData, onDeleteWid
         </div>
       </div>
 
-      {/* 텍스트 영역 */}
+      {/* 리치 텍스트 에디터 영역 */}
       <div className="relative">
-        <textarea
-          value={content}
-          onChange={handleChange}
-          placeholder="여기에 메모를 입력하세요&#10;모든 참여자가 함께 편집할 수 있어요"
-          maxLength={MAX_CHARS}
-          rows={8}
-          className="w-full px-4 py-3 text-sm text-gray-800 placeholder-gray-300 bg-transparent resize-none focus:outline-none leading-relaxed"
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={handleInput}
+          onPaste={handlePaste}
+          onKeyDown={handleKeyDown}
+          onFocus={() => { isLocalEdit.current = true }}
+          onBlur={() => { isLocalEdit.current = false }}
+          className="memo-editor w-full px-4 py-3 text-sm text-gray-800 bg-transparent focus:outline-none leading-relaxed min-h-[200px] max-h-[400px] overflow-y-auto"
+          role="textbox"
+          aria-multiline="true"
+          aria-label="메모 입력"
         />
         {/* 글자수 */}
         {charCount > 0 && (
-          <div className="absolute bottom-2 right-3 text-[10px] text-gray-300">
-            {charCount}/{MAX_CHARS}
+          <div className={`absolute bottom-2 right-3 text-[10px] ${isOverLimit ? 'text-red-500 font-semibold' : 'text-gray-300'}`}>
+            {charCount}/{MAX_CHARS}{isOverLimit ? ' (초과)' : ''}
           </div>
         )}
+      </div>
+
+      {/* 서식 안내 */}
+      <div className="px-4 py-1.5 border-t border-gray-50 flex items-center gap-3">
+        <span className="text-[10px] text-gray-300">
+          서식 유지 붙여넣기 지원 · Ctrl+B <b className="text-gray-400">굵게</b> · Ctrl+I <i className="text-gray-400">기울임</i> · Ctrl+U <u className="text-gray-400">밑줄</u>
+        </span>
       </div>
     </div>
   )

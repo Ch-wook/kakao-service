@@ -45,3 +45,84 @@ button {
 .h-dvh {
   height: 100dvh;
 }
+
+/* ── 메모 에디터 (contentEditable) ── */
+.memo-editor:empty::before {
+  content: '여기에 메모를 입력하세요\A모든 참여자가 함께 편집할 수 있어요\A\A붙여넣기 시 서식이 유지됩니다';
+  white-space: pre-wrap;
+  color: #d1d5db;
+  pointer-events: none;
+}
+
+/* 리치 텍스트 기본 스타일 */
+.memo-editor a {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+.memo-editor b, .memo-editor strong {
+  font-weight: 700;
+}
+.memo-editor i, .memo-editor em {
+  font-style: italic;
+}
+.memo-editor u {
+  text-decoration: underline;
+}
+.memo-editor ul, .memo-editor ol {
+  padding-left: 1.5rem;
+  margin: 0.25rem 0;
+}
+.memo-editor ul {
+  list-style: disc;
+}
+.memo-editor ol {
+  list-style: decimal;
+}
+.memo-editor table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5rem 0;
+  font-size: 0.8rem;
+}
+.memo-editor table td, .memo-editor table th {
+  border: 1px solid #e5e7eb;
+  padding: 0.25rem 0.5rem;
+}
+.memo-editor table th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+.memo-editor h1, .memo-editor h2, .memo-editor h3,
+.memo-editor h4, .memo-editor h5, .memo-editor h6 {
+  font-weight: 700;
+  margin: 0.25rem 0;
+}
+.memo-editor h1 { font-size: 1.25rem; }
+.memo-editor h2 { font-size: 1.125rem; }
+.memo-editor h3 { font-size: 1rem; }
+.memo-editor blockquote {
+  border-left: 3px solid #d1d5db;
+  padding-left: 0.75rem;
+  margin: 0.25rem 0;
+  color: #6b7280;
+}
+.memo-editor img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 0.25rem 0;
+}
+.memo-editor pre, .memo-editor code {
+  font-family: monospace;
+  background: #f3f4f6;
+  border-radius: 0.25rem;
+  font-size: 0.8rem;
+}
+.memo-editor pre {
+  padding: 0.5rem;
+  overflow-x: auto;
+  margin: 0.25rem 0;
+}
+.memo-editor code {
+  padding: 0.1rem 0.3rem;
+}
