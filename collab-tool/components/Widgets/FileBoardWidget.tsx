@@ -60,6 +60,7 @@ export default function FileBoardWidget({
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [confirmDeleteWidget, setConfirmDeleteWidget] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dragCounter = useRef(0)
   const inputId = useId()
@@ -140,13 +141,27 @@ export default function FileBoardWidget({
             <span className="text-xs text-gray-400 flex-none">{files.length}개</span>
           )}
         </div>
-        <button
-          onClick={() => onDeleteWidget(widget.id)}
-          className="flex-none p-1.5 text-gray-300 active:text-red-400 rounded-lg transition-colors"
-          aria-label="위젯 삭제"
-        >
-          <X size={15} />
-        </button>
+        {confirmDeleteWidget ? (
+          <div className="flex items-center gap-1 flex-none">
+            <span className="text-xs text-gray-500">삭제?</span>
+            <button
+              onClick={() => { onDeleteWidget(widget.id); setConfirmDeleteWidget(false) }}
+              className="text-xs text-red-500 font-semibold px-1.5 py-0.5 active:bg-red-50 rounded"
+            >확인</button>
+            <button
+              onClick={() => setConfirmDeleteWidget(false)}
+              className="text-xs text-gray-400 px-1.5 py-0.5 active:bg-gray-100 rounded"
+            >취소</button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmDeleteWidget(true)}
+            className="flex-none p-1.5 text-gray-300 active:text-red-400 rounded-lg transition-colors"
+            aria-label="위젯 삭제"
+          >
+            <X size={15} />
+          </button>
+        )}
       </div>
 
       {/* 드래그 오버레이 안내 */}

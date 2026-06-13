@@ -126,3 +126,12 @@ button {
 .memo-editor code {
   padding: 0.1rem 0.3rem;
 }
+
+/* 스크롤바 숨기기 (가로 스크롤 영역용) */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
