@@ -21,6 +21,7 @@ export interface TabConfig {
 
 export interface TabConfigData {
   tabs: TabConfig[]
+  menuOrder?: string[]
 }
 
 export interface NoticeData {

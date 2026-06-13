@@ -33,8 +33,10 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
+  horizontalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { SortableWidgetWrapper } from '@/components/Widgets/SortableWidgetWrapper'
+import { SortableTabWrapper } from '@/components/Widgets/SortableTabWrapper'
 
 type ActiveSection = 'widgets' | 'ledger' | 'schedule'
 
@@ -97,6 +99,7 @@ export default function RoomPage() {
     uploadFile,
     deleteFile,
     updateWidgetOrder,
+    updateMenuOrder,
   } = useWidgets(roomId)
 
   // 닉네임 기준 유니크 참여자 수 (같은 사람이 여러 기기로 접속해도 1명으로 카운트)
@@ -128,7 +131,7 @@ export default function RoomPage() {
   const activeTypeInfo = WIDGET_TYPES.find((t) => t.type === activeWidgetType) ?? null
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
@@ -145,6 +148,30 @@ export default function RoomPage() {
       updateWidgetOrder(newOrder.map(w => w.id))
     }
   }, [filteredWidgets, updateWidgetOrder])
+
+  const defaultMenuOrder = [
+    'all',
+    ...WIDGET_TYPES.map(t => `type:${t.type}`),
+    ...tabs.map(t => `tab:${t.id}`),
+    'schedule',
+    'ledger'
+  ]
+
+  const currentMenuOrder = [...new Set([...menuOrder, ...defaultMenuOrder])].filter(id => defaultMenuOrder.includes(id))
+
+  const handleMenuDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+    if (over && active.id !== over.id) {
+      const oldIndex = currentMenuOrder.indexOf(active.id as string)
+      const newIndex = currentMenuOrder.indexOf(over.id as string)
+      
+      const newOrder = [...currentMenuOrder]
+      const [removed] = newOrder.splice(oldIndex, 1)
+      newOrder.splice(newIndex, 0, removed)
+      
+      updateMenuOrder(newOrder)
+    }
+  }, [currentMenuOrder, updateMenuOrder])
 
   // 방 정보 조회
   useEffect(() => {
@@ -406,70 +433,127 @@ export default function RoomPage() {
       </header>
 
       {/* ── 통합 탭 바 (단일 스크롤 행) ── */}
-      <div className="flex-none flex bg-white border-b border-gray-200 overflow-x-auto scrollbar-hide">
-        {/* 전체 */}
-        <button
-          onClick={() => { setActiveSection('widgets'); setActiveWidgetType(null); setActiveCustomTab(null) }}
-          className={`flex-none px-4 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
-            activeSection === 'widgets' && activeWidgetType === null && activeCustomTab === null
-              ? 'text-blue-600 border-blue-500'
-              : 'text-gray-500 border-transparent'
-          }`}
+      <div className="flex-none flex items-center bg-white border-b border-gray-200 overflow-x-auto scrollbar-hide">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleMenuDragEnd}
         >
-          전체
-        </button>
-
-        {/* 위젯 타입 탭 */}
-        {WIDGET_TYPES.map((opt) => {
-          const count = displayWidgets.filter((w) => w.type === opt.type).length
-          const isActive = activeSection === 'widgets' && activeWidgetType === opt.type
-          return (
-            <button
-              key={opt.type}
-              onClick={() => { setActiveSection('widgets'); setActiveWidgetType(opt.type); setActiveCustomTab(null) }}
-              className={`flex-none flex items-center gap-1 px-3 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
-                isActive ? 'text-blue-600 border-blue-500' : 'text-gray-500 border-transparent'
-              }`}
-            >
-              <span className="text-sm">{opt.emoji}</span>
-              <span>{opt.label}</span>
-              {count > 0 && (
-                <span className={`text-[10px] font-semibold px-1 rounded-full ${isActive ? 'text-blue-500' : 'text-gray-400'}`}>
-                  {count}
-                </span>
-              )}
-            </button>
-          )
-        })}
+          <SortableContext
+            items={currentMenuOrder}
+            strategy={horizontalListSortingStrategy}
+          >
+            {currentMenuOrder.map((itemId) => {
+              if (itemId === 'all') {
+                return (
+                  <SortableTabWrapper key={itemId} id={itemId}>
+                    <button
+                      onClick={() => { setActiveSection('widgets'); setActiveWidgetType(null); setActiveCustomTab(null) }}
+                      className={`flex-none px-4 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
+                        activeSection === 'widgets' && activeWidgetType === null && activeCustomTab === null
+                          ? 'text-blue-600 border-blue-500'
+                          : 'text-gray-500 border-transparent'
+                      }`}
+                    >
+                      전체
+                    </button>
+                  </SortableTabWrapper>
+                )
+              }
+              if (itemId.startsWith('type:')) {
+                const opt = WIDGET_TYPES.find(t => t.type === itemId.replace('type:', ''))
+                if (!opt) return null
+                const count = displayWidgets.filter((w) => w.type === opt.type).length
+                const isActive = activeSection === 'widgets' && activeWidgetType === opt.type
+                return (
+                  <SortableTabWrapper key={itemId} id={itemId}>
+                    <button
+                      onClick={() => { setActiveSection('widgets'); setActiveWidgetType(opt.type); setActiveCustomTab(null) }}
+                      className={`flex-none flex items-center gap-1 px-3 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
+                        isActive ? 'text-blue-600 border-blue-500' : 'text-gray-500 border-transparent'
+                      }`}
+                    >
+                      <span className="text-sm">{opt.emoji}</span>
+                      <span>{opt.label}</span>
+                      {count > 0 && (
+                        <span className={`text-[10px] font-semibold px-1 rounded-full ${isActive ? 'text-blue-500' : 'text-gray-400'}`}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  </SortableTabWrapper>
+                )
+              }
+              if (itemId.startsWith('tab:')) {
+                const tab = tabs.find(t => t.id === itemId.replace('tab:', ''))
+                if (!tab) return null
+                return (
+                  <SortableTabWrapper key={itemId} id={itemId}>
+                    <button
+                      onClick={() => { setActiveSection('widgets'); setActiveWidgetType(null); setActiveCustomTab(tab.id) }}
+                      className={`px-3 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
+                        activeSection === 'widgets' && activeCustomTab === tab.id
+                          ? 'text-blue-600 border-blue-500'
+                          : 'text-gray-500 border-transparent'
+                      }`}
+                    >
+                      {tab.name}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (activeCustomTab === tab.id) setActiveCustomTab(null)
+                        deleteTab(tab.id)
+                      }}
+                      className="p-1 -ml-1.5 mr-1 text-gray-200 hover:text-red-400 active:text-red-500 transition-colors pointer-events-auto"
+                      aria-label={`${tab.name} 탭 삭제`}
+                    >
+                      <X size={10} />
+                    </button>
+                  </SortableTabWrapper>
+                )
+              }
+              if (itemId === 'schedule') {
+                return (
+                  <SortableTabWrapper key={itemId} id={itemId}>
+                    <button
+                      onClick={() => { setActiveSection('schedule'); setActiveWidgetType(null) }}
+                      className={`flex-none flex items-center gap-1 px-3 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
+                        activeSection === 'schedule'
+                          ? 'text-emerald-600 border-emerald-500'
+                          : 'text-gray-500 border-transparent'
+                      }`}
+                    >
+                      <CalendarDays size={13} />
+                      일정
+                    </button>
+                  </SortableTabWrapper>
+                )
+              }
+              if (itemId === 'ledger') {
+                return (
+                  <SortableTabWrapper key={itemId} id={itemId}>
+                    <button
+                      onClick={() => { setActiveSection('ledger'); setActiveWidgetType(null) }}
+                      className={`flex-none flex items-center gap-1 px-3 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
+                        activeSection === 'ledger'
+                          ? 'text-violet-600 border-violet-500'
+                          : 'text-gray-500 border-transparent'
+                      }`}
+                    >
+                      <BookOpen size={13} />
+                      장부
+                    </button>
+                  </SortableTabWrapper>
+                )
+              }
+              return null
+            })}
+          </SortableContext>
+        </DndContext>
 
         {/* 구분선 */}
-        {tabs.length > 0 && <div className="flex-none w-px bg-gray-100 my-2 mx-1" />}
-
-        {/* 커스텀 탭 */}
-        {tabs.map((tab) => (
-          <div key={tab.id} className="flex-none flex items-center">
-            <button
-              onClick={() => { setActiveSection('widgets'); setActiveWidgetType(null); setActiveCustomTab(tab.id) }}
-              className={`px-3 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
-                activeSection === 'widgets' && activeCustomTab === tab.id
-                  ? 'text-blue-600 border-blue-500'
-                  : 'text-gray-500 border-transparent'
-              }`}
-            >
-              {tab.name}
-            </button>
-            <button
-              onClick={() => {
-                if (activeCustomTab === tab.id) setActiveCustomTab(null)
-                deleteTab(tab.id)
-              }}
-              className="p-1 -ml-1.5 text-gray-200 active:text-red-400 transition-colors"
-              aria-label={`${tab.name} 탭 삭제`}
-            >
-              <X size={10} />
-            </button>
-          </div>
-        ))}
+        <div className="flex-none w-px h-4 bg-gray-200 my-2 mx-1" />
 
         {/* 커스텀 탭 추가 */}
         {addingTab ? (
@@ -497,41 +581,12 @@ export default function RoomPage() {
         ) : (
           <button
             onClick={() => setAddingTab(true)}
-            className="flex-none px-2.5 py-2.5 text-gray-300 active:text-blue-400 transition-colors"
+            className="flex-none px-2.5 py-2.5 text-gray-300 active:text-blue-400 hover:text-gray-400 transition-colors"
             aria-label="그룹 탭 추가"
           >
             <Plus size={14} />
           </button>
         )}
-
-        {/* 구분선 */}
-        <div className="flex-none w-px bg-gray-100 my-2 mx-1" />
-
-        {/* 일정 */}
-        <button
-          onClick={() => { setActiveSection('schedule'); setActiveWidgetType(null) }}
-          className={`flex-none flex items-center gap-1 px-3 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
-            activeSection === 'schedule'
-              ? 'text-emerald-600 border-emerald-500'
-              : 'text-gray-500 border-transparent'
-          }`}
-        >
-          <CalendarDays size={13} />
-          일정
-        </button>
-
-        {/* 장부 */}
-        <button
-          onClick={() => { setActiveSection('ledger'); setActiveWidgetType(null) }}
-          className={`flex-none flex items-center gap-1 px-3 py-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
-            activeSection === 'ledger'
-              ? 'text-violet-600 border-violet-500'
-              : 'text-gray-500 border-transparent'
-          }`}
-        >
-          <BookOpen size={13} />
-          장부
-        </button>
       </div>
 
       {/* ── 공지 배너 — widgets 탭일 때만 표시 ── */}

@@ -940,6 +940,7 @@ export const useWidgets = (roomId: string) => {
   // ─────────────────────────────────────────────
   const tabConfigWidget = widgets.find((w) => w.type === 'tab-config')
   const tabs: TabConfig[] = (tabConfigWidget?.data?.tabs as TabConfig[]) ?? []
+  const menuOrder: string[] = (tabConfigWidget?.data?.menuOrder as string[]) ?? []
 
   // ─────────────────────────────────────────────
   // 탭: 새 탭 생성
@@ -1052,7 +1053,51 @@ export const useWidgets = (roomId: string) => {
         optimisticUpdates.current.delete(widgetId)
       }
     },
+    },
     [fetchWidgets]
+  )
+
+  // ─────────────────────────────────────────────
+  // 상단 바 메뉴 순서 업데이트
+  // ─────────────────────────────────────────────
+  const updateMenuOrder = useCallback(
+    async (newMenuOrder: string[]): Promise<boolean> => {
+      const existing = widgets.find((w) => w.type === 'tab-config')
+      
+      if (!existing) {
+        // 탭 위젯이 없으면 새로 생성
+        const maxOrder = widgets.length > 0 ? Math.max(...widgets.map((w) => w.order)) : -1
+        const newData: TabConfigData = { tabs: [], menuOrder: newMenuOrder }
+        const { error: err } = await supabase
+          .from('widgets')
+          .insert({
+            room_id: roomId,
+            type: 'tab-config',
+            title: '__tab_config__',
+            data: newData as unknown as Record<string, unknown>,
+            order: maxOrder + 1,
+          })
+        if (err) { console.error(err); return false }
+        return true
+      } else {
+        const currentTabs = (existing.data?.tabs as TabConfig[]) ?? []
+        const newData: TabConfigData = { tabs: currentTabs, menuOrder: newMenuOrder }
+        
+        optimisticUpdates.current.add(existing.id)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === existing.id ? { ...w, data: newData as unknown as Record<string, unknown> } : w))
+        )
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: newData, updated_at: getCurrentTimestamp() })
+          .eq('id', existing.id)
+          
+        optimisticUpdates.current.delete(existing.id)
+        if (err) { console.error(err); await fetchWidgets(); return false }
+        return true
+      }
+    },
+    [roomId, widgets, fetchWidgets]
   )
 
   // ─────────────────────────────────────────────
@@ -1552,6 +1597,7 @@ export const useWidgets = (roomId: string) => {
     error,
     refetch: fetchWidgets,
     tabs,
+    menuOrder,
     createTab,
     deleteTab,
     setWidgetTab,
@@ -1579,5 +1625,6 @@ export const useWidgets = (roomId: string) => {
     uploadFile,
     deleteFile,
     updateWidgetOrder,
+    updateMenuOrder,
   }
 }

@@ -4,12 +4,12 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ReactNode } from 'react'
 
-interface SortableWidgetWrapperProps {
+interface SortableTabWrapperProps {
   id: string
   children: ReactNode
 }
 
-export function SortableWidgetWrapper({ id, children }: SortableWidgetWrapperProps) {
+export function SortableTabWrapper({ id, children }: SortableTabWrapperProps) {
   const {
     attributes,
     listeners,
@@ -32,15 +32,13 @@ export function SortableWidgetWrapper({ id, children }: SortableWidgetWrapperPro
       style={style}
       {...attributes}
       {...listeners}
-      className={`relative rounded-2xl transition-all duration-200 cursor-grab active:cursor-grabbing touch-none ${
-        isDragging ? 'opacity-90 scale-[1.02] shadow-xl ring-2 ring-blue-400' : 'opacity-100 hover:shadow-md'
+      className={`flex-none flex items-center transition-all duration-200 cursor-grab active:cursor-grabbing touch-none ${
+        isDragging ? 'opacity-80 scale-105 z-50 shadow-md ring-1 ring-blue-300 rounded-lg bg-white/80' : 'opacity-100'
       }`}
     >
-      {/* 위젯 본문 */}
-      <div className="w-full h-full pointer-events-auto">
+      <div className="pointer-events-auto flex items-center">
         {children}
       </div>
     </div>
   )
 }
-
