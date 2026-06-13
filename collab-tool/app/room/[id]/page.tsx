@@ -20,6 +20,21 @@ import NoticeBanner, { NoticeAddBar } from '@/components/NoticeBanner'
 import { Share2, Users, Plus, ArrowLeft, BookOpen, CalendarDays, X, LayoutGrid } from 'lucide-react'
 import { generateShareUrl } from '@/lib/utils'
 import type { Room, Participant } from '@/types'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { SortableWidgetWrapper } from '@/components/Widgets/SortableWidgetWrapper'
 
 type ActiveSection = 'widgets' | 'ledger' | 'schedule'
 
@@ -81,6 +96,7 @@ export default function RoomPage() {
     updateTrackName,
     uploadFile,
     deleteFile,
+    updateWidgetOrder,
   } = useWidgets(roomId)
 
   // 닉네임 기준 유니크 참여자 수 (같은 사람이 여러 기기로 접속해도 1명으로 카운트)
@@ -110,6 +126,25 @@ export default function RoomPage() {
       : displayWidgets
 
   const activeTypeInfo = WIDGET_TYPES.find((t) => t.type === activeWidgetType) ?? null
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+    if (over && active.id !== over.id) {
+      const oldIndex = filteredWidgets.findIndex((w) => w.id === active.id)
+      const newIndex = filteredWidgets.findIndex((w) => w.id === over.id)
+      
+      const newOrder = [...filteredWidgets]
+      const [removed] = newOrder.splice(oldIndex, 1)
+      newOrder.splice(newIndex, 0, removed)
+      
+      updateWidgetOrder(newOrder.map(w => w.id))
+    }
+  }, [filteredWidgets, updateWidgetOrder])
 
   // 방 정보 조회
   useEffect(() => {
@@ -587,117 +622,118 @@ export default function RoomPage() {
                   </div>
                 )
               ) : (
-                filteredWidgets.map((widget) => {
-                  if (widget.type === 'checklist') {
-                    return (
-                      <ChecklistWidget
-                        key={widget.id}
-                        widget={widget}
-                        nickname={session.nickname ?? undefined}
-                        onToggle={handleToggle}
-                        onAdd={addChecklistItem}
-                        onUpdate={updateChecklistItem}
-                        onDelete={deleteChecklistItem}
-                        onDeleteWidget={deleteWidget}
-                      />
-                    )
-                  }
-                  if (widget.type === 'expense') {
-                    return (
-                      <ExpenseWidget
-                        key={widget.id}
-                        widget={widget}
-                        nickname={session.nickname ?? undefined}
-                        participants={participants.map((p) => p.nickname)}
-                        onUpdateData={updateExpenseData}
-                        onTogglePayer={togglePayerStatus}
-                        onDeleteWidget={deleteWidget}
-                      />
-                    )
-                  }
-                  if (widget.type === 'member') {
-                    return (
-                      <MemberWidget
-                        key={widget.id}
-                        widget={widget}
-                        onUpdateData={updateMemberData}
-                        onToggleStatus={toggleMemberStatus}
-                        onDeleteWidget={deleteWidget}
-                      />
-                    )
-                  }
-                  if (widget.type === 'fee') {
-                    return (
-                      <FeeWidget
-                        key={widget.id}
-                        widget={widget}
-                        nickname={session.nickname ?? undefined}
-                        participants={participants.map((p) => p.nickname)}
-                        onUpdateData={updateFeeData}
-                        onToggleEntry={toggleFeeEntry}
-                        onDeleteWidget={deleteWidget}
-                      />
-                    )
-                  }
-                  if (widget.type === 'memo') {
-                    return (
-                      <MemoWidget
-                        key={widget.id}
-                        widget={widget}
-                        nickname={session.nickname ?? undefined}
-                        onUpdateData={updateMemoData}
-                        onDeleteWidget={deleteWidget}
-                      />
-                    )
-                  }
-                  if (widget.type === 'image-gallery') {
-                    return (
-                      <ImageGalleryWidget
-                        key={widget.id}
-                        widget={widget}
-                        nickname={session.nickname ?? undefined}
-                        onUploadImage={uploadImage}
-                        onDeleteImage={deleteImage}
-                        onDeleteWidget={deleteWidget}
-                      />
-                    )
-                  }
-                  if (widget.type === 'music-player') {
-                    return (
-                      <MusicPlayerWidget
-                        key={widget.id}
-                        widget={widget}
-                        nickname={session.nickname ?? undefined}
-                        onUploadTrack={uploadTrack}
-                        onDeleteTrack={deleteTrack}
-                        onUpdateTrackName={updateTrackName}
-                        onDeleteWidget={deleteWidget}
-                      />
-                    )
-                  }
-                  if (widget.type === 'file-board') {
-                    return (
-                      <FileBoardWidget
-                        key={widget.id}
-                        widget={widget}
-                        nickname={session.nickname ?? undefined}
-                        onUploadFile={uploadFile}
-                        onDeleteFile={deleteFile}
-                        onDeleteWidget={deleteWidget}
-                      />
-                    )
-                  }
-                  return (
-                    <div
-                      key={widget.id}
-                      className="bg-white rounded-2xl border border-gray-100 p-4 opacity-60"
-                    >
-                      <p className="text-sm text-gray-400">
-                        {widget.title || widget.type} (준비 중)
-                      </p>
-                    </div>
-                  )
-                })
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={filteredWidgets.map((w) => w.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {filteredWidgets.map((widget) => {
+                      let content = null
+                      if (widget.type === 'checklist') {
+                        content = (
+                          <ChecklistWidget
+                            widget={widget}
+                            nickname={session.nickname ?? undefined}
+                            onToggle={handleToggle}
+                            onAdd={addChecklistItem}
+                            onUpdate={updateChecklistItem}
+                            onDelete={deleteChecklistItem}
+                            onDeleteWidget={deleteWidget}
+                          />
+                        )
+                      } else if (widget.type === 'expense') {
+                        content = (
+                          <ExpenseWidget
+                            widget={widget}
+                            nickname={session.nickname ?? undefined}
+                            participants={participants.map((p) => p.nickname)}
+                            onUpdateData={updateExpenseData}
+                            onTogglePayer={togglePayerStatus}
+                            onDeleteWidget={deleteWidget}
+                          />
+                        )
+                      } else if (widget.type === 'member') {
+                        content = (
+                          <MemberWidget
+                            widget={widget}
+                            onUpdateData={updateMemberData}
+                            onToggleStatus={toggleMemberStatus}
+                            onDeleteWidget={deleteWidget}
+                          />
+                        )
+                      } else if (widget.type === 'fee') {
+                        content = (
+                          <FeeWidget
+                            widget={widget}
+                            nickname={session.nickname ?? undefined}
+                            participants={participants.map((p) => p.nickname)}
+                            onUpdateData={updateFeeData}
+                            onToggleEntry={toggleFeeEntry}
+                            onDeleteWidget={deleteWidget}
+                          />
+                        )
+                      } else if (widget.type === 'memo') {
+                        content = (
+                          <MemoWidget
+                            widget={widget}
+                            nickname={session.nickname ?? undefined}
+                            onUpdateData={updateMemoData}
+                            onDeleteWidget={deleteWidget}
+                          />
+                        )
+                      } else if (widget.type === 'image-gallery') {
+                        content = (
+                          <ImageGalleryWidget
+                            widget={widget}
+                            nickname={session.nickname ?? undefined}
+                            onUploadImage={uploadImage}
+                            onDeleteImage={deleteImage}
+                            onDeleteWidget={deleteWidget}
+                          />
+                        )
+                      } else if (widget.type === 'music-player') {
+                        content = (
+                          <MusicPlayerWidget
+                            widget={widget}
+                            nickname={session.nickname ?? undefined}
+                            onUploadTrack={uploadTrack}
+                            onDeleteTrack={deleteTrack}
+                            onUpdateTrackName={updateTrackName}
+                            onDeleteWidget={deleteWidget}
+                          />
+                        )
+                      } else if (widget.type === 'file-board') {
+                        content = (
+                          <FileBoardWidget
+                            widget={widget}
+                            nickname={session.nickname ?? undefined}
+                            onUploadFile={uploadFile}
+                            onDeleteFile={deleteFile}
+                            onDeleteWidget={deleteWidget}
+                          />
+                        )
+                      } else {
+                        content = (
+                          <div className="bg-white rounded-2xl border border-gray-100 p-4 opacity-60">
+                            <p className="text-sm text-gray-400">
+                              {widget.title || widget.type} (준비 중)
+                            </p>
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <SortableWidgetWrapper key={widget.id} id={widget.id}>
+                          {content}
+                        </SortableWidgetWrapper>
+                      )
+                    })}
+                  </SortableContext>
+                </DndContext>
               )}
 
               {/* 타입 탭에서 위젯 있을 때 하단 추가 버튼 */}

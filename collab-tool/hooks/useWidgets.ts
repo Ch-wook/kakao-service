@@ -1506,6 +1506,46 @@ export const useWidgets = (roomId: string) => {
     [widgets]
   )
 
+  // ─────────────────────────────────────────────
+  // 위젯 순서 변경 (Drag & Drop)
+  // ─────────────────────────────────────────────
+  const updateWidgetOrder = useCallback(
+    async (orderedWidgetIds: string[]): Promise<boolean> => {
+      // 1. 로컬 상태 즉시 업데이트 (낙관적 UI)
+      setWidgets((prev) => {
+        const newWidgets = [...prev]
+        newWidgets.sort((a, b) => {
+          const aIndex = orderedWidgetIds.indexOf(a.id)
+          const bIndex = orderedWidgetIds.indexOf(b.id)
+          if (aIndex === -1) return 1
+          if (bIndex === -1) return -1
+          return aIndex - bIndex
+        })
+        return newWidgets.map((w, index) => {
+          if (orderedWidgetIds.includes(w.id)) {
+            return { ...w, order: index }
+          }
+          return w
+        })
+      })
+
+      // 2. Supabase 비동기 업데이트 (Promise.all 활용)
+      try {
+        const updatePromises = orderedWidgetIds.map((id, index) =>
+          supabase.from('widgets').update({ order: index }).eq('id', id)
+        )
+        await Promise.all(updatePromises)
+        return true
+      } catch (err) {
+        console.error('Error updating widget order:', err)
+        setError('위젯 순서 변경 중 오류가 발생했습니다')
+        fetchWidgets()
+        return false
+      }
+    },
+    [fetchWidgets]
+  )
+
   return {
     widgets,
     isLoading,
@@ -1538,5 +1578,6 @@ export const useWidgets = (roomId: string) => {
     updateTrackName,
     uploadFile,
     deleteFile,
+    updateWidgetOrder,
   }
 }
