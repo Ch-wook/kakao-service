@@ -63,8 +63,8 @@ export default function ImageGalleryWidget({
       setUploadError(null)
 
       for (const file of Array.from(files)) {
-        if (file.size > 10 * 1024 * 1024) {
-          setUploadError('10MB 이하의 파일만 업로드할 수 있습니다')
+        if (file.size > 50 * 1024 * 1024) {
+          setUploadError('50MB 이하의 파일만 업로드할 수 있습니다')
           continue
         }
         if (!file.type.startsWith('image/')) {
@@ -155,7 +155,7 @@ export default function ImageGalleryWidget({
         <div className="mx-3 my-3 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50 flex flex-col items-center justify-center py-8 gap-2">
           <ImageIcon size={28} className="text-gray-300" />
           <p className="text-sm text-gray-400 font-medium">사진을 업로드해보세요</p>
-          <p className="text-xs text-gray-300">JPG · PNG · GIF · WebP, 최대 10MB</p>
+          <p className="text-xs text-gray-300">JPG · PNG · GIF · WebP, 최대 50MB</p>
         </div>
       )}
 

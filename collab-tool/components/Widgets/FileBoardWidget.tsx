@@ -86,8 +86,8 @@ export default function FileBoardWidget({
       setUploadError(null)
 
       for (const file of Array.from(fileList)) {
-        if (file.size > 100 * 1024 * 1024) {
-          setUploadError(`${file.name}: 100MB 이하 파일만 업로드할 수 있습니다`)
+        if (file.size > 200 * 1024 * 1024) {
+          setUploadError(`${file.name}: 200MB 이하 파일만 업로드할 수 있습니다`)
           continue
         }
         setUploadProgress(0)
@@ -162,7 +162,7 @@ export default function FileBoardWidget({
         <div className="mx-3 my-3 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50 flex flex-col items-center justify-center py-8 gap-2">
           <Paperclip size={28} className="text-gray-300" />
           <p className="text-sm text-gray-400 font-medium">파일을 업로드해보세요</p>
-          <p className="text-xs text-gray-300">모든 형식 지원 · 최대 100MB · 드래그 앤 드롭 가능</p>
+          <p className="text-xs text-gray-300">모든 형식 지원 · 최대 200MB · 드래그 앤 드롭 가능</p>
         </div>
       )}
 

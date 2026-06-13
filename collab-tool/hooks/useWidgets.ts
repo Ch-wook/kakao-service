@@ -1065,10 +1065,7 @@ export const useWidgets = (roomId: string) => {
       nickname: string | undefined,
       onProgress: (pct: number) => void
     ): Promise<boolean> => {
-      const widget = widgets.find((w) => w.id === widgetId)
-      if (!widget || widget.type !== 'image-gallery') return false
-
-      if (file.size > 10 * 1024 * 1024) throw new Error('파일 크기는 10MB 이하여야 합니다')
+      if (file.size > 50 * 1024 * 1024) throw new Error('파일 크기는 50MB 이하여야 합니다')
       if (!file.type.startsWith('image/')) throw new Error('이미지 파일만 업로드할 수 있습니다')
 
       const uuid = crypto.randomUUID()
@@ -1092,9 +1089,19 @@ export const useWidgets = (roomId: string) => {
           size: file.size,
         }
 
-        const currentData = asGallery(widget.data)
+        // DB에서 최신 위젯 데이터를 다시 조회 (stale closure 방지)
+        const { data: freshWidget, error: fetchErr } = await supabase
+          .from('widgets')
+          .select('data')
+          .eq('id', widgetId)
+          .single()
+
+        const latestData = fetchErr
+          ? asGallery(widgets.find((w) => w.id === widgetId)?.data ?? { images: [] })
+          : asGallery(freshWidget.data as Record<string, unknown>)
+
         const updatedData: ImageGalleryData = {
-          images: [...(currentData.images || []), newImage],
+          images: [...(latestData.images || []), newImage],
         }
 
         optimisticUpdates.current.add(widgetId)
@@ -1117,9 +1124,17 @@ export const useWidgets = (roomId: string) => {
       } catch (err) {
         onProgress(0)
         console.error('Error uploading image:', err)
-        setWidgets((prev) =>
-          prev.map((w) => (w.id === widgetId ? widget : w))
-        )
+        // 롤백 — DB에서 최신 상태를 다시 가져옴
+        const { data: rollbackWidget } = await supabase
+          .from('widgets')
+          .select('*')
+          .eq('id', widgetId)
+          .single()
+        if (rollbackWidget) {
+          setWidgets((prev) =>
+            prev.map((w) => (w.id === widgetId ? rollbackWidget as Widget : w))
+          )
+        }
         throw err
       } finally {
         optimisticUpdates.current.delete(widgetId)
@@ -1185,9 +1200,6 @@ export const useWidgets = (roomId: string) => {
       nickname: string | undefined,
       onProgress: (pct: number) => void
     ): Promise<boolean> => {
-      const widget = widgets.find((w) => w.id === widgetId)
-      if (!widget || widget.type !== 'music-player') return false
-
       if (file.size > 50 * 1024 * 1024) throw new Error('파일 크기는 50MB 이하여야 합니다')
       // MIME 타입 또는 확장자로 오디오 여부 확인 (.m4a는 video/mp4로 잡힐 수 있음)
       const audioExts = ['.mp3', '.m4a', '.wav', '.ogg', '.aac', '.flac', '.opus', '.mp4']
@@ -1219,9 +1231,19 @@ export const useWidgets = (roomId: string) => {
           size: file.size,
         }
 
-        const currentData = asMusic(widget.data)
+        // DB에서 최신 위젯 데이터를 다시 조회 (stale closure 방지)
+        const { data: freshWidget, error: fetchErr } = await supabase
+          .from('widgets')
+          .select('data')
+          .eq('id', widgetId)
+          .single()
+
+        const latestData = fetchErr
+          ? asMusic(widgets.find((w) => w.id === widgetId)?.data ?? { tracks: [] })
+          : asMusic(freshWidget.data as Record<string, unknown>)
+
         const updatedData: MusicPlayerData = {
-          tracks: [...(currentData.tracks || []), newTrack],
+          tracks: [...(latestData.tracks || []), newTrack],
         }
 
         optimisticUpdates.current.add(widgetId)
@@ -1244,9 +1266,17 @@ export const useWidgets = (roomId: string) => {
       } catch (err) {
         onProgress(0)
         console.error('Error uploading track:', err)
-        setWidgets((prev) =>
-          prev.map((w) => (w.id === widgetId ? widget : w))
-        )
+        // 롤백 — DB에서 최신 상태를 다시 가져옴
+        const { data: rollbackWidget } = await supabase
+          .from('widgets')
+          .select('*')
+          .eq('id', widgetId)
+          .single()
+        if (rollbackWidget) {
+          setWidgets((prev) =>
+            prev.map((w) => (w.id === widgetId ? rollbackWidget as Widget : w))
+          )
+        }
         throw err
       } finally {
         optimisticUpdates.current.delete(widgetId)
@@ -1354,10 +1384,7 @@ export const useWidgets = (roomId: string) => {
       nickname: string | undefined,
       onProgress: (pct: number) => void
     ): Promise<boolean> => {
-      const widget = widgets.find((w) => w.id === widgetId)
-      if (!widget || widget.type !== 'file-board') return false
-
-      if (file.size > 100 * 1024 * 1024) throw new Error('파일 크기는 100MB 이하여야 합니다')
+      if (file.size > 200 * 1024 * 1024) throw new Error('파일 크기는 200MB 이하여야 합니다')
 
       const uuid = crypto.randomUUID()
       const storagePath = `files/${roomId}/${widgetId}/${uuid}-${sanitizeFilename(file.name)}`
@@ -1381,9 +1408,19 @@ export const useWidgets = (roomId: string) => {
           uploadedAt: getCurrentTimestamp(),
         }
 
-        const currentData = asFileBoard(widget.data)
+        // DB에서 최신 위젯 데이터를 다시 조회 (stale closure 방지)
+        const { data: freshWidget, error: fetchErr } = await supabase
+          .from('widgets')
+          .select('data')
+          .eq('id', widgetId)
+          .single()
+
+        const latestData = fetchErr
+          ? asFileBoard(widgets.find((w) => w.id === widgetId)?.data ?? { files: [] })
+          : asFileBoard(freshWidget.data as Record<string, unknown>)
+
         const updatedData: FileBoardData = {
-          files: [...(currentData.files || []), newFile],
+          files: [...(latestData.files || []), newFile],
         }
 
         optimisticUpdates.current.add(widgetId)
@@ -1406,7 +1443,17 @@ export const useWidgets = (roomId: string) => {
       } catch (err) {
         onProgress(0)
         console.error('Error uploading file:', err)
-        setWidgets((prev) => prev.map((w) => (w.id === widgetId ? widget : w)))
+        // 롤백 — DB에서 최신 상태를 다시 가져옴
+        const { data: rollbackWidget } = await supabase
+          .from('widgets')
+          .select('*')
+          .eq('id', widgetId)
+          .single()
+        if (rollbackWidget) {
+          setWidgets((prev) =>
+            prev.map((w) => (w.id === widgetId ? rollbackWidget as Widget : w))
+          )
+        }
         throw err
       } finally {
         optimisticUpdates.current.delete(widgetId)

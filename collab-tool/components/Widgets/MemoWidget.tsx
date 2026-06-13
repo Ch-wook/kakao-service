@@ -76,7 +76,7 @@ export default function MemoWidget({ widget, nickname, onUpdateData, onDeleteWid
   }
 
   const charCount = content.length
-  const MAX_CHARS = 2000
+  const MAX_CHARS = 3000
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
