@@ -25,7 +25,7 @@ CREATE TABLE participants (
 CREATE TABLE widgets (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (type IN ('checklist', 'expense', 'vote', 'memo', 'schedule', 'roles', 'poll')),
+  type TEXT NOT NULL CHECK (type IN ('checklist', 'expense', 'vote', 'memo', 'schedule', 'roles', 'poll', 'member', 'ledger', 'fee', 'tab-config', 'notice', 'image-gallery', 'music-player', 'file-board', 'study-plan', 'retreat')),
   title TEXT,
   data JSONB NOT NULL DEFAULT '{}',
   "order" INTEGER NOT NULL DEFAULT 0,
