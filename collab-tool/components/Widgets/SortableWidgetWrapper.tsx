@@ -3,6 +3,7 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ReactNode } from 'react'
+import { GripVertical } from 'lucide-react'
 
 interface SortableWidgetWrapperProps {
   id: string
@@ -14,6 +15,7 @@ export function SortableWidgetWrapper({ id, children }: SortableWidgetWrapperPro
     attributes,
     listeners,
     setNodeRef,
+    setActivatorNodeRef,
     transform,
     transition,
     isDragging,
@@ -30,17 +32,25 @@ export function SortableWidgetWrapper({ id, children }: SortableWidgetWrapperPro
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      className={`relative rounded-2xl transition-all duration-200 cursor-grab active:cursor-grabbing touch-none ${
-        isDragging ? 'opacity-90 scale-[1.02] shadow-xl ring-2 ring-blue-400' : 'opacity-100 hover:shadow-md'
+      className={`relative rounded-2xl transition-all duration-200 ${
+        isDragging ? 'opacity-90 scale-[1.02] shadow-xl ring-2 ring-blue-400' : 'opacity-100'
       }`}
     >
-      {/* 위젯 본문 */}
-      <div className="w-full h-full pointer-events-auto">
+      {/* 드래그 핸들 — 이 영역만 touch-none + grab */}
+      <button
+        ref={setActivatorNodeRef}
+        {...attributes}
+        {...listeners}
+        className="absolute top-3 right-3 z-10 p-1.5 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 active:bg-gray-200 cursor-grab active:cursor-grabbing touch-none transition-colors"
+        aria-label="위젯 순서 변경"
+      >
+        <GripVertical size={14} />
+      </button>
+
+      {/* 위젯 본문 — 터치 스크롤 정상 작동 */}
+      <div className="w-full h-full">
         {children}
       </div>
     </div>
   )
 }
-
