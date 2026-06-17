@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { Trash2, RefreshCw, LogOut, Shield, Users, LayoutGrid, Clock } from 'lucide-react'
 
 interface RoomWithStats {
@@ -239,7 +240,12 @@ export default function AdminPage() {
                   >
                     <div className="flex justify-between items-start w-full md:w-auto md:min-w-0">
                       <div className="min-w-0">
-                        <p className="font-medium text-white truncate">{room.title}</p>
+                        <Link 
+                          href={`/room/${room.id}`}
+                          className="font-medium text-indigo-400 hover:text-indigo-300 hover:underline truncate block"
+                        >
+                          {room.title}
+                        </Link>
                         <p className="text-gray-600 text-xs mt-0.5 truncate">{room.id}</p>
                       </div>
                       <button
