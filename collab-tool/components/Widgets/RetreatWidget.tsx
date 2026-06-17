@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Trash2, Plus, ChevronDown, ChevronUp, MapPin, Calendar, Church, Check, X } from 'lucide-react'
+import { Trash2, Plus, ChevronDown, ChevronUp, MapPin, Calendar, Church, Check, X, Edit2, Save } from 'lucide-react'
 import { generateId } from '@/lib/utils'
 import type { Widget, RetreatData, RetreatMember, RetreatVisitation } from '@/types'
 
@@ -115,6 +115,15 @@ function OverviewTab({ data, members, timeSlots, dDay, onSave }: {
   const [isEditingGoal, setIsEditingGoal] = useState(false)
   const [newGoal, setNewGoal] = useState(data.totalGoal.toString())
 
+  const [isEditingInfo, setIsEditingInfo] = useState(false)
+  const [editInfo, setEditInfo] = useState({
+    eventTitle: data.eventTitle || '',
+    eventSubtitle: data.eventSubtitle || '',
+    startDate: data.startDate || '',
+    endDate: data.endDate || '',
+    location: data.location || ''
+  })
+
   const regCounts = useMemo(() => {
     const c = { none: 0, pre: 0, confirmed: 0 }
     members.forEach(m => c[m.registrationStatus]++)
@@ -134,17 +143,53 @@ function OverviewTab({ data, members, timeSlots, dDay, onSave }: {
   return (
     <div className="space-y-4">
       {/* 이벤트 정보 카드 */}
-      <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4 space-y-2">
-        <h4 className="font-bold text-base text-gray-900">{data.eventTitle}</h4>
-        <p className="text-xs text-purple-600 font-medium">{data.eventSubtitle}</p>
-        <div className="flex items-center gap-1.5 text-xs text-gray-600 mt-1">
-          <Calendar size={12} />
-          <span>{data.startDate?.replace(/-/g, '.')} ~ {data.endDate?.replace(/-/g, '.')}</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-xs text-gray-600">
-          <MapPin size={12} />
-          <span>{data.location}</span>
-        </div>
+      <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4 space-y-2 relative group">
+        {!isEditingInfo ? (
+          <>
+            <button onClick={() => setIsEditingInfo(true)} className="absolute top-3 right-3 p-1.5 bg-white/50 hover:bg-white text-purple-600 rounded-lg transition-colors md:opacity-0 group-hover:opacity-100">
+              <Edit2 size={12} />
+            </button>
+            <h4 className="font-bold text-base text-gray-900 pr-6">{data.eventTitle}</h4>
+            <p className="text-xs text-purple-600 font-medium">{data.eventSubtitle}</p>
+            <div className="flex items-center gap-1.5 text-xs text-gray-600 mt-1">
+              <Calendar size={12} />
+              <span>{data.startDate?.replace(/-/g, '.')} ~ {data.endDate?.replace(/-/g, '.')}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+              <MapPin size={12} />
+              <span>{data.location}</span>
+            </div>
+          </>
+        ) : (
+          <div className="space-y-2">
+            <input type="text" placeholder="행사 제목" value={editInfo.eventTitle} onChange={e => setEditInfo({...editInfo, eventTitle: e.target.value})}
+              className="w-full font-bold text-sm border-b border-purple-200 bg-transparent px-1 py-0.5 focus:outline-none focus:border-purple-400" />
+            <input type="text" placeholder="부제목" value={editInfo.eventSubtitle} onChange={e => setEditInfo({...editInfo, eventSubtitle: e.target.value})}
+              className="w-full text-xs text-purple-600 font-medium border-b border-purple-200 bg-transparent px-1 py-0.5 focus:outline-none focus:border-purple-400" />
+            
+            <div className="flex items-center gap-2 mt-2">
+              <Calendar size={12} className="text-gray-500" />
+              <input type="date" value={editInfo.startDate} onChange={e => setEditInfo({...editInfo, startDate: e.target.value})}
+                className="text-[10px] border border-gray-200 rounded px-1 py-0.5 bg-white" />
+              <span className="text-[10px] text-gray-400">~</span>
+              <input type="date" value={editInfo.endDate} onChange={e => setEditInfo({...editInfo, endDate: e.target.value})}
+                className="text-[10px] border border-gray-200 rounded px-1 py-0.5 bg-white" />
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <MapPin size={12} className="text-gray-500" />
+              <input type="text" placeholder="장소" value={editInfo.location} onChange={e => setEditInfo({...editInfo, location: e.target.value})}
+                className="flex-1 text-xs border-b border-purple-200 bg-transparent px-1 py-0.5 focus:outline-none focus:border-purple-400" />
+            </div>
+
+            <div className="flex justify-end gap-1.5 pt-1">
+              <button onClick={() => setIsEditingInfo(false)} className="text-[10px] px-2 py-1 text-gray-500 hover:bg-gray-100 rounded">취소</button>
+              <button onClick={() => { onSave(editInfo); setIsEditingInfo(false) }} className="flex items-center gap-1 text-[10px] px-2 py-1 bg-purple-500 text-white hover:bg-purple-600 rounded">
+                <Save size={10} /> 저장
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 핵심 지표 */}
