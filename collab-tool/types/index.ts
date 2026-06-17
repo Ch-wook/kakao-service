@@ -33,7 +33,7 @@ export interface NoticeData {
 export interface Widget {
   id: string
   room_id: string
-  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll' | 'member' | 'ledger' | 'fee' | 'tab-config' | 'notice' | 'image-gallery' | 'music-player' | 'file-board' | 'study-plan'
+  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll' | 'member' | 'ledger' | 'fee' | 'tab-config' | 'notice' | 'image-gallery' | 'music-player' | 'file-board' | 'study-plan' | 'retreat'
   title?: string
   data: Record<string, unknown>
   order: number
@@ -253,4 +253,40 @@ export interface StudyPlanData {
   lectures: StudyLecture[]
   dailyLogs: StudyDailyLog[]
   goalMinutes: number       // 일일 목표 학습 시간 (분), 기본값 180
+}
+
+// ── 하계성회 ─────────────────────────────────────────
+
+export interface RetreatMember {
+  id: string
+  name: string
+  group: number             // 순 번호 (1, 2, 3 ...)
+  registrationStatus: 'none' | 'pre' | 'confirmed' // 미등록/가등록/선등록
+}
+
+export interface RetreatTimeSlot {
+  id: string
+  label: string             // "월(저녁)", "화(오전)" 등
+  attendeeIds: string[]     // 참석 member IDs
+}
+
+export interface RetreatVisitation {
+  id: string
+  memberName: string
+  date: string              // YYYY-MM-DD
+  status: 'planned' | 'completed'
+  memo?: string
+}
+
+export interface RetreatData {
+  eventTitle: string
+  eventSubtitle: string
+  startDate: string         // YYYY-MM-DD
+  endDate: string
+  location: string
+  groupName: string
+  totalGoal: number
+  members: RetreatMember[]
+  timeSlots: RetreatTimeSlot[]
+  visitations: RetreatVisitation[]
 }

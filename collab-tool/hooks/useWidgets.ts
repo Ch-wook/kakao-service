@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { generateId, getCurrentTimestamp } from '@/lib/utils'
-import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, ScheduleData, MemoData, NoticeData, TabConfig, TabConfigData, ImageGalleryData, GalleryImage, MusicPlayerData, MusicTrack, FileBoardData, SharedFile, StudyPlanData } from '@/types'
+import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, ScheduleData, MemoData, NoticeData, TabConfig, TabConfigData, ImageGalleryData, GalleryImage, MusicPlayerData, MusicTrack, FileBoardData, SharedFile, StudyPlanData, RetreatData } from '@/types'
+import { DEFAULT_RETREAT_DATA } from '@/lib/retreatDefaultData'
 
 // 파일명 특수문자 제거 (Storage 경로 안전화)
 const sanitizeFilename = (name: string): string =>
@@ -141,6 +142,12 @@ const asStudyPlan = (data: Record<string, unknown>): StudyPlanData =>
 const fromStudyPlan = (data: StudyPlanData): Record<string, unknown> =>
   data as unknown as Record<string, unknown>
 
+const asRetreat = (data: Record<string, unknown>): RetreatData =>
+  data as unknown as RetreatData
+
+const fromRetreat = (data: RetreatData): Record<string, unknown> =>
+  data as unknown as Record<string, unknown>
+
 
 export const useWidgets = (roomId: string) => {
   const [widgets, setWidgets] = useState<Widget[]>([])
@@ -265,6 +272,7 @@ export const useWidgets = (roomId: string) => {
           'music-player': { tracks: [] },
           'file-board': { files: [] },
           'study-plan': { lectures: [], dailyLogs: [], goalMinutes: 180 },
+          'retreat': fromRetreat(DEFAULT_RETREAT_DATA),
         }
         const defaultData = defaultDataMap[type] ?? {}
 
@@ -1634,6 +1642,43 @@ export const useWidgets = (roomId: string) => {
     [widgets]
   )
 
+  // ─────────────────────────────────────────────
+  // 성회 관리: 전체 데이터 업데이트
+  // ─────────────────────────────────────────────
+  const updateRetreatData = useCallback(
+    async (widgetId: string, newData: RetreatData): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'retreat') return false
+
+      const currentData = asRetreat(widget.data)
+
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) => (w.id === widgetId ? { ...w, data: fromRetreat(newData) } : w))
+      )
+
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: newData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+
+        if (err) throw err
+        return true
+      } catch (err) {
+        console.error('Error updating retreat data:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? { ...w, data: fromRetreat(currentData) } : w))
+        )
+        setError('성회 데이터 업데이트 중 오류가 발생했습니다')
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [widgets]
+  )
+
   return {
     widgets,
     isLoading,
@@ -1670,5 +1715,6 @@ export const useWidgets = (roomId: string) => {
     updateWidgetOrder,
     updateMenuOrder,
     updateStudyPlanData,
+    updateRetreatData,
   }
 }
