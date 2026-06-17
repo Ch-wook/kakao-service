@@ -137,12 +137,14 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       {/* 헤더 */}
-      <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Shield size={20} className="text-indigo-400" />
-          <span className="font-bold text-lg">Collab 관리자</span>
+      <header className="border-b border-gray-800 px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+          <div className="flex items-center gap-3">
+            <Shield size={20} className="text-indigo-400" />
+            <span className="font-bold text-lg">Collab 관리자</span>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
           <button
             onClick={() => fetchRooms(password)}
             disabled={isLoading}
@@ -161,9 +163,9 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
         {/* 통계 카드 */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
             { icon: LayoutGrid, label: '전체 방', value: rooms.length, color: 'text-indigo-400' },
             { icon: Users, label: '전체 참여자', value: totalParticipants, color: 'text-blue-400' },
@@ -178,8 +180,8 @@ export default function AdminPage() {
         </div>
 
         {/* 일괄 삭제 */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3">
             <Clock size={16} className="text-amber-400" />
             <span className="text-sm text-gray-300">비활성 방 일괄 삭제</span>
             <select
@@ -196,7 +198,7 @@ export default function AdminPage() {
           <button
             onClick={handleBulkDelete}
             disabled={inactiveRooms === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Trash2 size={14} />
             일괄 삭제
@@ -219,7 +221,7 @@ export default function AdminPage() {
           ) : (
             <div className="divide-y divide-gray-800">
               {/* 테이블 헤더 */}
-              <div className="grid grid-cols-[1fr_120px_80px_80px_160px_60px] gap-4 px-5 py-3 text-xs text-gray-500 font-medium uppercase tracking-wide">
+              <div className="hidden md:grid grid-cols-[1fr_120px_80px_80px_160px_60px] gap-4 px-5 py-3 text-xs text-gray-500 font-medium uppercase tracking-wide">
                 <span>방 제목</span>
                 <span>생성일</span>
                 <span>참여자</span>
@@ -233,27 +235,53 @@ export default function AdminPage() {
                 return (
                   <div
                     key={room.id}
-                    className={`grid grid-cols-[1fr_120px_80px_80px_160px_60px] gap-4 px-5 py-4 items-center text-sm transition-colors hover:bg-gray-800/50 ${isOld ? 'opacity-60' : ''}`}
+                    className={`flex flex-col md:grid md:grid-cols-[1fr_120px_80px_80px_160px_60px] gap-3 md:gap-4 px-5 py-4 items-start md:items-center text-sm transition-colors hover:bg-gray-800/50 ${isOld ? 'opacity-60' : ''}`}
                   >
-                    <div className="min-w-0">
-                      <p className="font-medium text-white truncate">{room.title}</p>
-                      <p className="text-gray-600 text-xs mt-0.5 truncate">{room.id}</p>
+                    <div className="flex justify-between items-start w-full md:w-auto md:min-w-0">
+                      <div className="min-w-0">
+                        <p className="font-medium text-white truncate">{room.title}</p>
+                        <p className="text-gray-600 text-xs mt-0.5 truncate">{room.id}</p>
+                      </div>
+                      <button
+                        onClick={() => handleDelete(room.id)}
+                        disabled={deletingIds.has(room.id)}
+                        className="md:hidden flex items-center justify-center p-2 text-gray-600 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors disabled:opacity-40"
+                        aria-label="삭제"
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
-                    <span className="text-gray-400 text-xs">{formatDate(room.created_at)}</span>
-                    <span className="text-gray-300">{room.participantCount}명</span>
-                    <span className="text-gray-300">{room.widgetCount}개</span>
-                    <div>
-                      <span className="text-gray-400 text-xs">{formatDate(room.lastActivity)}</span>
-                      {inactive > 0 && (
-                        <span className={`ml-2 text-xs ${isOld ? 'text-red-400' : 'text-gray-600'}`}>
-                          ({inactive}일 전)
-                        </span>
-                      )}
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 md:contents">
+                      <div className="flex items-center gap-1.5 md:block">
+                        <span className="md:hidden text-gray-500 text-xs">생성일:</span>
+                        <span className="text-gray-400 text-xs">{formatDate(room.created_at)}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 md:block">
+                        <span className="md:hidden text-gray-500 text-xs">참여자:</span>
+                        <span className="text-gray-300">{room.participantCount}명</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 md:block">
+                        <span className="md:hidden text-gray-500 text-xs">위젯:</span>
+                        <span className="text-gray-300">{room.widgetCount}개</span>
+                      </div>
+                      <div className="w-full md:w-auto flex items-center gap-1.5 md:block mt-1 md:mt-0">
+                        <span className="md:hidden text-gray-500 text-xs">마지막 활동:</span>
+                        <div className="flex flex-wrap items-center">
+                          <span className="text-gray-400 text-xs">{formatDate(room.lastActivity)}</span>
+                          {inactive > 0 && (
+                            <span className={`ml-1 text-xs ${isOld ? 'text-red-400' : 'text-gray-600'}`}>
+                              ({inactive}일 전)
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
+
                     <button
                       onClick={() => handleDelete(room.id)}
                       disabled={deletingIds.has(room.id)}
-                      className="flex items-center justify-center p-2 text-gray-600 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors disabled:opacity-40"
+                      className="hidden md:flex items-center justify-center p-2 text-gray-600 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors disabled:opacity-40"
                       aria-label="삭제"
                     >
                       <Trash2 size={15} />
