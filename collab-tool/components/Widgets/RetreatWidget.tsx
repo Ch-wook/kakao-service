@@ -192,6 +192,10 @@ function OverviewTab({ data, members, timeSlots, dDay }: {
 function MembersTab({ members, onSave }: {
   members: RetreatMember[]; onSave: (patch: Partial<RetreatData>) => Promise<boolean>
 }) {
+  const [showAdd, setShowAdd] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newGroup, setNewGroup] = useState<number>(1)
+
   const groups = useMemo(() => {
     const map = new Map<number, RetreatMember[]>()
     members.forEach(m => {
@@ -214,14 +218,56 @@ function MembersTab({ members, onSave }: {
     onSave({ members: updated })
   }
 
+  const handleDelete = (memberId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm('정말 삭제하시겠습니까?')) return
+    onSave({ members: members.filter(m => m.id !== memberId) })
+  }
+
+  const handleAdd = () => {
+    if (!newName.trim()) return
+    const newM: RetreatMember = {
+      id: generateId(), name: newName.trim(), group: newGroup, registrationStatus: 'none'
+    }
+    onSave({ members: [...members, newM] })
+    setNewName('')
+    setShowAdd(false)
+  }
+
   return (
     <div className="space-y-3">
-      {/* 요약 */}
-      <div className="flex gap-2 text-[10px]">
-        <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">미등록 {regCounts.none}</span>
-        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">가등록 {regCounts.pre}</span>
-        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">선등록 {regCounts.confirmed}</span>
+      {/* 요약 및 추가 버튼 */}
+      <div className="flex justify-between items-center">
+        <div className="flex gap-1.5 text-[10px]">
+          <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">미등록 {regCounts.none}</span>
+          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">가등록 {regCounts.pre}</span>
+          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">선등록 {regCounts.confirmed}</span>
+        </div>
+        <button onClick={() => setShowAdd(!showAdd)}
+          className="flex items-center gap-1 bg-purple-500 hover:bg-purple-600 text-white text-[10px] font-semibold rounded-lg px-2.5 py-1.5 transition-colors">
+          <Plus size={12} /> 추가
+        </button>
       </div>
+
+      {showAdd && (
+        <div className="bg-purple-50/50 rounded-xl p-3 space-y-2">
+          <div className="flex gap-2">
+            <input type="text" placeholder="이름" value={newName} onChange={(e) => setNewName(e.target.value)}
+              className="flex-1 border border-gray-200 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-purple-300" />
+            <input type="number" min={1} value={newGroup} onChange={(e) => setNewGroup(Number(e.target.value))}
+              className="w-16 border border-gray-200 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-purple-300 text-center" />
+            <span className="text-xs text-gray-500 self-center">순</span>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleAdd} className="flex-1 bg-purple-500 hover:bg-purple-600 text-white rounded-lg py-2 text-xs font-semibold transition-colors">추가</button>
+            <button onClick={() => setShowAdd(false)} className="px-4 py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors">취소</button>
+          </div>
+        </div>
+      )}
+
+      {members.length === 0 && !showAdd && (
+        <div className="text-center py-6 text-xs text-gray-400">등록된 명단이 없습니다.</div>
+      )}
 
       {/* 순별 목록 */}
       {groups.map(([groupNum, groupMembers]) => (
@@ -234,12 +280,22 @@ function MembersTab({ members, onSave }: {
               <button
                 key={m.id}
                 onClick={() => handleToggle(m.id)}
-                className="flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                className="group flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors relative"
               >
-                <span className="text-xs text-gray-800 truncate">{m.name}</span>
-                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${STATUS_COLOR[m.registrationStatus]}`}>
-                  {STATUS_LABEL[m.registrationStatus]}
-                </span>
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className="text-xs text-gray-800 truncate">{m.name}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${STATUS_COLOR[m.registrationStatus]}`}>
+                    {STATUS_LABEL[m.registrationStatus]}
+                  </span>
+                  <div 
+                    onClick={(e) => handleDelete(m.id, e)}
+                    className="p-1 rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors md:opacity-0 group-hover:opacity-100"
+                  >
+                    <X size={10} />
+                  </div>
+                </div>
               </button>
             ))}
           </div>
