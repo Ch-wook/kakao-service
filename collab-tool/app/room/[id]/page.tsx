@@ -99,6 +99,7 @@ export default function RoomPage() {
     updateTrackName,
     uploadFile,
     deleteFile,
+    menuOrder,
     updateWidgetOrder,
     updateMenuOrder,
     updateStudyPlanData,
