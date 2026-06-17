@@ -96,7 +96,7 @@ export default function RetreatWidget({ widget, onUpdateData, onDeleteWidget }: 
       </div>
 
       <div className="px-4 py-3">
-        {subTab === 'overview' && <OverviewTab data={data} members={members} timeSlots={timeSlots} dDay={dDay} />}
+        {subTab === 'overview' && <OverviewTab data={data} members={members} timeSlots={timeSlots} dDay={dDay} onSave={save} />}
         {subTab === 'members' && <MembersTab members={members} onSave={save} />}
         {subTab === 'timeslots' && <TimeSlotsTab members={members} timeSlots={timeSlots} onSave={save} />}
         {subTab === 'visitation' && <VisitationTab members={members} visitations={visitations} onSave={save} />}
@@ -108,16 +108,28 @@ export default function RetreatWidget({ widget, onUpdateData, onDeleteWidget }: 
 // ════════════════════════════════════════════════
 // 개요 탭
 // ════════════════════════════════════════════════
-function OverviewTab({ data, members, timeSlots, dDay }: {
-  data: RetreatData; members: RetreatMember[]; timeSlots: RetreatData['timeSlots']; dDay: number | null
+function OverviewTab({ data, members, timeSlots, dDay, onSave }: {
+  data: RetreatData; members: RetreatMember[]; timeSlots: RetreatData['timeSlots']; dDay: number | null;
+  onSave: (patch: Partial<RetreatData>) => Promise<boolean>
 }) {
+  const [isEditingGoal, setIsEditingGoal] = useState(false)
+  const [newGoal, setNewGoal] = useState(data.totalGoal.toString())
+
   const regCounts = useMemo(() => {
     const c = { none: 0, pre: 0, confirmed: 0 }
     members.forEach(m => c[m.registrationStatus]++)
     return c
   }, [members])
   const totalReg = regCounts.pre + regCounts.confirmed
-  const regPct = members.length > 0 ? Math.round((totalReg / data.totalGoal) * 100) : 0
+  const regPct = members.length > 0 && data.totalGoal > 0 ? Math.round((totalReg / data.totalGoal) * 100) : 0
+
+  const handleSaveGoal = () => {
+    const goal = parseInt(newGoal, 10)
+    if (!isNaN(goal) && goal >= 0) {
+      onSave({ totalGoal: goal })
+    }
+    setIsEditingGoal(false)
+  }
 
   return (
     <div className="space-y-4">
@@ -147,9 +159,20 @@ function OverviewTab({ data, members, timeSlots, dDay }: {
           <p className="text-xl font-bold text-blue-600">{members.length}</p>
           <p className="text-[10px] text-gray-400 mt-0.5">현재 인원</p>
         </div>
-        <div className="bg-emerald-50 rounded-xl p-3 text-center">
-          <p className="text-xl font-bold text-emerald-600">{data.totalGoal}</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">목표 인원</p>
+        <div className="bg-emerald-50 rounded-xl p-3 text-center flex flex-col justify-center items-center relative group">
+          {isEditingGoal ? (
+            <div className="flex items-center gap-1">
+              <input type="number" min={0} value={newGoal} onChange={e => setNewGoal(e.target.value)} 
+                onKeyDown={e => e.key === 'Enter' && handleSaveGoal()}
+                className="w-12 text-center text-lg font-bold text-emerald-600 bg-white border border-emerald-200 rounded px-1 py-0.5 outline-none" autoFocus />
+              <button onClick={handleSaveGoal} className="text-[10px] bg-emerald-500 text-white px-1.5 py-1 rounded"><Check size={10}/></button>
+            </div>
+          ) : (
+            <div onClick={() => setIsEditingGoal(true)} className="cursor-pointer">
+              <p className="text-xl font-bold text-emerald-600 group-hover:underline decoration-emerald-300">{data.totalGoal}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">목표 인원</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -180,6 +203,7 @@ function OverviewTab({ data, members, timeSlots, dDay }: {
               <span className="text-xs font-bold text-purple-600">{ts.attendeeIds.length}명</span>
             </div>
           ))}
+          {timeSlots.length === 0 && <span className="text-[10px] text-gray-400 col-span-2 text-center py-2">등록된 타임이 없습니다.</span>}
         </div>
       </div>
     </div>
@@ -192,9 +216,10 @@ function OverviewTab({ data, members, timeSlots, dDay }: {
 function MembersTab({ members, onSave }: {
   members: RetreatMember[]; onSave: (patch: Partial<RetreatData>) => Promise<boolean>
 }) {
-  const [showAdd, setShowAdd] = useState(false)
-  const [newName, setNewName] = useState('')
-  const [newGroup, setNewGroup] = useState<number>(1)
+  const [showAddGroup, setShowAddGroup] = useState(false)
+  const [newGroupNum, setNewGroupNum] = useState<number>(1)
+  const [addingToGroup, setAddingToGroup] = useState<number | null>(null)
+  const [newNames, setNewNames] = useState('')
 
   const groups = useMemo(() => {
     const map = new Map<number, RetreatMember[]>()
@@ -224,58 +249,72 @@ function MembersTab({ members, onSave }: {
     onSave({ members: members.filter(m => m.id !== memberId) })
   }
 
-  const handleAdd = () => {
-    if (!newName.trim()) return
-    const newM: RetreatMember = {
-      id: generateId(), name: newName.trim(), group: newGroup, registrationStatus: 'none'
-    }
-    onSave({ members: [...members, newM] })
-    setNewName('')
-    setShowAdd(false)
+  const handleAddMembers = (group: number) => {
+    const names = newNames.split(',').map(n => n.trim()).filter(Boolean)
+    if (names.length === 0) return
+    const newMembers = names.map(name => ({
+      id: generateId(), name, group, registrationStatus: 'none' as const
+    }))
+    onSave({ members: [...members, ...newMembers] })
+    setNewNames('')
+    setAddingToGroup(null)
+  }
+
+  const handleCreateGroup = () => {
+    if (!newGroupNum) return
+    // 방어코드: 이미 해당 순이 있는지 확인 (없을 때만 추가하는 로직은 딱히 필요없음, 빈 순이라도 UI상 띄워주기 위해선 members 데이터에 뭔가가 있어야 하는데, RetreatMember 배열 구조상 그룹 정보만 저장할 순 없음. 
+    // 그냥 입력란만 열어주고 바로 첫 멤버를 추가하도록 유도하는게 낫다)
+    setShowAddGroup(false)
+    setAddingToGroup(newGroupNum)
+  }
+
+  // 그룹 목록에 없는 "새로운 순"을 추가하려고 할 때를 대비해 가상 그룹들을 포함시킴
+  const displayGroups = [...groups]
+  if (addingToGroup !== null && !groups.find(g => g[0] === addingToGroup)) {
+    displayGroups.push([addingToGroup, []])
+    displayGroups.sort((a, b) => a[0] - b[0])
   }
 
   return (
     <div className="space-y-3">
-      {/* 요약 및 추가 버튼 */}
+      {/* 요약 및 순 추가 버튼 */}
       <div className="flex justify-between items-center">
         <div className="flex gap-1.5 text-[10px]">
           <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">미등록 {regCounts.none}</span>
           <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">가등록 {regCounts.pre}</span>
           <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">선등록 {regCounts.confirmed}</span>
         </div>
-        <button onClick={() => setShowAdd(!showAdd)}
+        <button onClick={() => setShowAddGroup(!showAddGroup)}
           className="flex items-center gap-1 bg-purple-500 hover:bg-purple-600 text-white text-[10px] font-semibold rounded-lg px-2.5 py-1.5 transition-colors">
-          <Plus size={12} /> 추가
+          <Plus size={12} /> 순 추가
         </button>
       </div>
 
-      {showAdd && (
-        <div className="bg-purple-50/50 rounded-xl p-3 space-y-2">
-          <div className="flex gap-2">
-            <input type="text" placeholder="이름" value={newName} onChange={(e) => setNewName(e.target.value)}
-              className="flex-1 border border-gray-200 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-purple-300" />
-            <input type="number" min={1} value={newGroup} onChange={(e) => setNewGroup(Number(e.target.value))}
-              className="w-16 border border-gray-200 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-purple-300 text-center" />
-            <span className="text-xs text-gray-500 self-center">순</span>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={handleAdd} className="flex-1 bg-purple-500 hover:bg-purple-600 text-white rounded-lg py-2 text-xs font-semibold transition-colors">추가</button>
-            <button onClick={() => setShowAdd(false)} className="px-4 py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors">취소</button>
-          </div>
+      {showAddGroup && (
+        <div className="flex gap-2 items-center bg-purple-50 p-2 rounded-xl border border-purple-100">
+          <input type="number" min={1} placeholder="순 번호" value={newGroupNum} onChange={e => setNewGroupNum(Number(e.target.value))}
+            className="w-16 border border-gray-200 rounded-lg p-1.5 text-xs bg-white text-center" />
+          <span className="text-xs text-gray-600">순</span>
+          <button onClick={handleCreateGroup} className="px-3 py-1.5 bg-purple-500 text-white text-xs rounded-lg font-medium">생성</button>
+          <button onClick={() => setShowAddGroup(false)} className="px-2 py-1.5 text-gray-400 text-xs">취소</button>
         </div>
       )}
 
-      {members.length === 0 && !showAdd && (
-        <div className="text-center py-6 text-xs text-gray-400">등록된 명단이 없습니다.</div>
+      {members.length === 0 && !addingToGroup && !showAddGroup && (
+        <div className="text-center py-6 text-xs text-gray-400">등록된 명단이 없습니다. 순을 추가해주세요.</div>
       )}
 
       {/* 순별 목록 */}
-      {groups.map(([groupNum, groupMembers]) => (
-        <div key={groupNum}>
-          <h5 className="text-[11px] font-bold text-gray-500 mb-1.5 border-b border-gray-100 pb-1">
-            {groupNum}순 ({groupMembers.length}명)
-          </h5>
-          <div className="grid grid-cols-2 gap-1">
+      {displayGroups.map(([groupNum, groupMembers]) => (
+        <div key={groupNum} className="mb-2">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-1 mb-1.5">
+            <h5 className="text-[11px] font-bold text-gray-500">{groupNum}순 ({groupMembers.length}명)</h5>
+            <button onClick={() => setAddingToGroup(groupNum)} className="text-[10px] text-purple-500 font-medium hover:text-purple-600">
+              + 인원 추가
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-1 mb-2">
             {groupMembers.map((m) => (
               <button
                 key={m.id}
@@ -299,6 +338,18 @@ function MembersTab({ members, onSave }: {
               </button>
             ))}
           </div>
+
+          {addingToGroup === groupNum && (
+            <div className="flex items-center gap-2 mt-1 px-1">
+              <input type="text" placeholder="이름 (쉼표로 구분하여 여러명 추가 가능)" value={newNames} 
+                onChange={(e) => setNewNames(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddMembers(groupNum) }}
+                autoFocus
+                className="flex-1 border border-gray-200 rounded-lg p-1.5 text-xs bg-gray-50 focus:bg-white" />
+              <button onClick={() => handleAddMembers(groupNum)} className="px-2.5 py-1.5 bg-gray-800 text-white text-xs rounded-lg">확인</button>
+              <button onClick={() => setAddingToGroup(null)} className="p-1.5 text-gray-400 hover:text-gray-600"><X size={14}/></button>
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -312,6 +363,8 @@ function TimeSlotsTab({ members, timeSlots, onSave }: {
   members: RetreatMember[]; timeSlots: RetreatData['timeSlots']; onSave: (patch: Partial<RetreatData>) => Promise<boolean>
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [showAddSlot, setShowAddSlot] = useState(false)
+  const [newSlotLabel, setNewSlotLabel] = useState('')
 
   const groups = useMemo(() => {
     const map = new Map<number, RetreatMember[]>()
@@ -331,13 +384,46 @@ function TimeSlotsTab({ members, timeSlots, onSave }: {
     onSave({ timeSlots: updated })
   }
 
+  const handleAddSlot = () => {
+    if (!newSlotLabel.trim()) return
+    const newTs = { id: generateId(), label: newSlotLabel.trim(), attendeeIds: [] }
+    onSave({ timeSlots: [...timeSlots, newTs] })
+    setNewSlotLabel('')
+    setShowAddSlot(false)
+  }
+
+  const handleDeleteSlot = (slotId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm('이 타임을 삭제하시겠습니까?')) return
+    onSave({ timeSlots: timeSlots.filter(ts => ts.id !== slotId) })
+  }
+
   return (
     <div className="space-y-2">
+      <div className="flex justify-end mb-1">
+        <button onClick={() => setShowAddSlot(!showAddSlot)} className="flex items-center gap-1 text-[10px] text-purple-600 font-semibold px-2 py-1 bg-purple-50 rounded-lg">
+          <Plus size={12} /> 타임 추가
+        </button>
+      </div>
+
+      {showAddSlot && (
+        <div className="flex gap-2 items-center bg-gray-50 p-2 rounded-xl mb-2 border border-gray-100">
+          <input type="text" placeholder="타임 이름 (예: 월요일 저녁)" value={newSlotLabel} onChange={e => setNewSlotLabel(e.target.value)}
+            className="flex-1 border border-gray-200 rounded-lg p-1.5 text-xs bg-white" />
+          <button onClick={handleAddSlot} className="px-3 py-1.5 bg-purple-500 text-white text-xs rounded-lg font-medium">추가</button>
+          <button onClick={() => setShowAddSlot(false)} className="px-2 py-1.5 text-gray-400 text-xs">취소</button>
+        </div>
+      )}
+
+      {timeSlots.length === 0 && !showAddSlot && (
+        <div className="text-center py-6 text-xs text-gray-400">등록된 타임이 없습니다.</div>
+      )}
+
       {timeSlots.map((ts) => {
         const isExpanded = expandedId === ts.id
         const pct = members.length > 0 ? Math.round((ts.attendeeIds.length / members.length) * 100) : 0
         return (
-          <div key={ts.id} className="border border-gray-100 rounded-xl overflow-hidden">
+          <div key={ts.id} className="border border-gray-100 rounded-xl overflow-hidden group">
             <button
               onClick={() => setExpandedId(isExpanded ? null : ts.id)}
               className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 transition-colors"
@@ -350,7 +436,10 @@ function TimeSlotsTab({ members, timeSlots, onSave }: {
                 <div className="w-16 bg-gray-100 rounded-full h-1.5">
                   <div className="h-1.5 rounded-full bg-purple-400 transition-all" style={{ width: `${pct}%` }} />
                 </div>
-                {isExpanded ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+                <div onClick={e => handleDeleteSlot(ts.id, e)} className="md:opacity-0 group-hover:opacity-100 p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors ml-1">
+                  <Trash2 size={12} />
+                </div>
+                {isExpanded ? <ChevronUp size={14} className="text-gray-400 ml-1" /> : <ChevronDown size={14} className="text-gray-400 ml-1" />}
               </div>
             </button>
 
