@@ -33,7 +33,7 @@ export interface NoticeData {
 export interface Widget {
   id: string
   room_id: string
-  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll' | 'member' | 'ledger' | 'fee' | 'tab-config' | 'notice' | 'image-gallery' | 'music-player' | 'file-board'
+  type: 'checklist' | 'expense' | 'vote' | 'memo' | 'schedule' | 'roles' | 'poll' | 'member' | 'ledger' | 'fee' | 'tab-config' | 'notice' | 'image-gallery' | 'music-player' | 'file-board' | 'study-plan'
   title?: string
   data: Record<string, unknown>
   order: number
@@ -228,4 +228,29 @@ export interface SharedFile {
 
 export interface FileBoardData {
   files: SharedFile[]
+}
+
+// ── 학습계획표 ─────────────────────────────────────────
+
+export interface StudyLecture {
+  id: string
+  title: string
+  description?: string
+  totalCount: number        // 전체 강의 수
+  createdAt: string
+}
+
+export interface StudyDailyLog {
+  id: string
+  lectureId: string
+  logDate: string           // YYYY-MM-DD
+  watchedCount: number
+  studyMinutes: number
+  memo?: string
+}
+
+export interface StudyPlanData {
+  lectures: StudyLecture[]
+  dailyLogs: StudyDailyLog[]
+  goalMinutes: number       // 일일 목표 학습 시간 (분), 기본값 180
 }

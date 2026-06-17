@@ -16,6 +16,7 @@ import MemoWidget from '@/components/Widgets/MemoWidget'
 import ImageGalleryWidget from '@/components/Widgets/ImageGalleryWidget'
 import MusicPlayerWidget from '@/components/Widgets/MusicPlayerWidget'
 import FileBoardWidget from '@/components/Widgets/FileBoardWidget'
+import StudyPlanWidget from '@/components/Widgets/StudyPlanWidget'
 import NoticeBanner, { NoticeAddBar } from '@/components/NoticeBanner'
 import { Share2, Users, Plus, ArrowLeft, BookOpen, CalendarDays, X, LayoutGrid } from 'lucide-react'
 import { generateShareUrl } from '@/lib/utils'
@@ -100,6 +101,7 @@ export default function RoomPage() {
     deleteFile,
     updateWidgetOrder,
     updateMenuOrder,
+    updateStudyPlanData,
   } = useWidgets(roomId)
 
   // 닉네임 기준 유니크 참여자 수 (같은 사람이 여러 기기로 접속해도 1명으로 카운트)
@@ -119,6 +121,7 @@ export default function RoomPage() {
     { type: 'image-gallery', label: '갤러리',     emoji: '🖼️' },
     { type: 'music-player',  label: '음악',       emoji: '🎵' },
     { type: 'file-board',    label: '파일',       emoji: '📁' },
+    { type: 'study-plan',    label: '학습',       emoji: '📚' },
   ] as const
 
   const displayWidgets = widgets.filter((w) => w.type !== 'ledger' && w.type !== 'schedule' && w.type !== 'tab-config' && w.type !== 'notice')
@@ -768,6 +771,15 @@ export default function RoomPage() {
                             nickname={session.nickname ?? undefined}
                             onUploadFile={uploadFile}
                             onDeleteFile={deleteFile}
+                            onDeleteWidget={deleteWidget}
+                          />
+                        )
+                      } else if (widget.type === 'study-plan') {
+                        content = (
+                          <StudyPlanWidget
+                            widget={widget}
+                            nickname={session.nickname ?? undefined}
+                            onUpdateData={updateStudyPlanData}
                             onDeleteWidget={deleteWidget}
                           />
                         )

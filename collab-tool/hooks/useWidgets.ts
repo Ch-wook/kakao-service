@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { generateId, getCurrentTimestamp } from '@/lib/utils'
-import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, ScheduleData, MemoData, NoticeData, TabConfig, TabConfigData, ImageGalleryData, GalleryImage, MusicPlayerData, MusicTrack, FileBoardData, SharedFile } from '@/types'
+import type { Widget, ChecklistItem, ChecklistData, ExpenseData, MemberData, MemberStatus, LedgerData, FeeData, ScheduleData, MemoData, NoticeData, TabConfig, TabConfigData, ImageGalleryData, GalleryImage, MusicPlayerData, MusicTrack, FileBoardData, SharedFile, StudyPlanData } from '@/types'
 
 // 파일명 특수문자 제거 (Storage 경로 안전화)
 const sanitizeFilename = (name: string): string =>
@@ -135,6 +135,12 @@ const asMusic = (data: Record<string, unknown>): MusicPlayerData =>
 const fromMusic = (data: MusicPlayerData): Record<string, unknown> =>
   data as unknown as Record<string, unknown>
 
+const asStudyPlan = (data: Record<string, unknown>): StudyPlanData =>
+  data as unknown as StudyPlanData
+
+const fromStudyPlan = (data: StudyPlanData): Record<string, unknown> =>
+  data as unknown as Record<string, unknown>
+
 
 export const useWidgets = (roomId: string) => {
   const [widgets, setWidgets] = useState<Widget[]>([])
@@ -258,6 +264,7 @@ export const useWidgets = (roomId: string) => {
           'image-gallery': { images: [] },
           'music-player': { tracks: [] },
           'file-board': { files: [] },
+          'study-plan': { lectures: [], dailyLogs: [], goalMinutes: 180 },
         }
         const defaultData = defaultDataMap[type] ?? {}
 
@@ -1052,8 +1059,7 @@ export const useWidgets = (roomId: string) => {
       } finally {
         optimisticUpdates.current.delete(widgetId)
       }
-    },
-    },
+      },
     [fetchWidgets]
   )
 
@@ -1591,6 +1597,43 @@ export const useWidgets = (roomId: string) => {
     [fetchWidgets]
   )
 
+  // ─────────────────────────────────────────────
+  // 학습계획표: 전체 데이터 업데이트
+  // ─────────────────────────────────────────────
+  const updateStudyPlanData = useCallback(
+    async (widgetId: string, newData: StudyPlanData): Promise<boolean> => {
+      const widget = widgets.find((w) => w.id === widgetId)
+      if (!widget || widget.type !== 'study-plan') return false
+
+      const currentData = asStudyPlan(widget.data)
+
+      optimisticUpdates.current.add(widgetId)
+      setWidgets((prev) =>
+        prev.map((w) => (w.id === widgetId ? { ...w, data: fromStudyPlan(newData) } : w))
+      )
+
+      try {
+        const { error: err } = await supabase
+          .from('widgets')
+          .update({ data: newData, updated_at: getCurrentTimestamp() })
+          .eq('id', widgetId)
+
+        if (err) throw err
+        return true
+      } catch (err) {
+        console.error('Error updating study plan data:', err)
+        setWidgets((prev) =>
+          prev.map((w) => (w.id === widgetId ? { ...w, data: fromStudyPlan(currentData) } : w))
+        )
+        setError('학습계획 데이터 업데이트 중 오류가 발생했습니다')
+        return false
+      } finally {
+        optimisticUpdates.current.delete(widgetId)
+      }
+    },
+    [widgets]
+  )
+
   return {
     widgets,
     isLoading,
@@ -1626,5 +1669,6 @@ export const useWidgets = (roomId: string) => {
     deleteFile,
     updateWidgetOrder,
     updateMenuOrder,
+    updateStudyPlanData,
   }
 }
