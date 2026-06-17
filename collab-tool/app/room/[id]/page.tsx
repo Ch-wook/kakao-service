@@ -20,7 +20,7 @@ import StudyPlanWidget from '@/components/Widgets/StudyPlanWidget'
 import RetreatWidget from '@/components/Widgets/RetreatWidget'
 import NoticeBanner, { NoticeAddBar } from '@/components/NoticeBanner'
 import { Share2, Users, Plus, ArrowLeft, BookOpen, CalendarDays, X, LayoutGrid } from 'lucide-react'
-import { generateShareUrl } from '@/lib/utils'
+import { generateShareUrl, generateId } from '@/lib/utils'
 import type { Room, Participant } from '@/types'
 import {
   DndContext,
@@ -54,6 +54,10 @@ export default function RoomPage() {
   const [isJoiningRoom, setIsJoiningRoom] = useState(false)
   const [showNicknameModal, setShowNicknameModal] = useState(false)
   const [addingWidgetType, setAddingWidgetType] = useState<string | null>(null)
+  
+  const [movingWidgetId, setMovingWidgetId] = useState<string | null>(null)
+  const [newTabNameForMove, setNewTabNameForMove] = useState('')
+
   const [error, setError] = useState<string | null>(null)
   const [shareSuccess, setShareSuccess] = useState(false)
   const [hasJoined, setHasJoined] = useState(false)
@@ -701,7 +705,7 @@ export default function RoomPage() {
                       }
 
                       return (
-                        <SortableWidgetWrapper key={widget.id} id={widget.id}>
+                        <SortableWidgetWrapper key={widget.id} id={widget.id} onMoveWidget={() => setMovingWidgetId(widget.id)}>
                           {content}
                         </SortableWidgetWrapper>
                       )
@@ -711,7 +715,7 @@ export default function RoomPage() {
               )}
 
               {/* 하단 위젯 추가 FAB */}
-              {!widgetsLoading && (
+              {!widgetsLoading && filteredWidgets.length > 0 && (
                 <button
                   onClick={() => setShowWidgetPicker(true)}
                   className="w-full flex items-center justify-center gap-2 py-3 mt-1 rounded-2xl border-2 border-dashed border-gray-200 text-sm text-gray-400 font-medium active:border-blue-300 active:text-blue-500 transition-colors"
@@ -808,6 +812,90 @@ export default function RoomPage() {
                   )}
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 탭 이동 모달 */}
+      {movingWidgetId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setMovingWidgetId(null)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-sm bg-white rounded-2xl p-5 shadow-xl animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-2">
+              <h3 className="font-bold text-gray-900">위젯 이동</h3>
+              <button onClick={() => setMovingWidgetId(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded">
+                <X size={16} />
+              </button>
+            </div>
+            
+            <div className="space-y-1 mb-4 max-h-[40vh] overflow-y-auto">
+              <button
+                onClick={async () => {
+                  await setWidgetTab(movingWidgetId, null)
+                  setMovingWidgetId(null)
+                }}
+                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                  activeCustomTab === null ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                전체 탭 (기본)
+              </button>
+              
+              {tabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={async () => {
+                    await setWidgetTab(movingWidgetId, tab.id)
+                    setMovingWidgetId(null)
+                  }}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                    activeCustomTab === tab.id ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {tab.name}
+                </button>
+              ))}
+            </div>
+
+            <div className="border-t border-gray-100 pt-3 flex gap-2">
+              <input
+                type="text"
+                placeholder="새로운 탭 생성 후 이동..."
+                value={newTabNameForMove}
+                onChange={e => setNewTabNameForMove(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter' && newTabNameForMove.trim()) {
+                    const newTab = await createTab(newTabNameForMove.trim())
+                    if (newTab) {
+                      await setWidgetTab(movingWidgetId, newTab.id)
+                      setNewTabNameForMove('')
+                      setMovingWidgetId(null)
+                      setActiveCustomTab(newTab.id)
+                    }
+                  }
+                }}
+                className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:border-blue-400 bg-gray-50 focus:bg-white"
+              />
+              <button
+                onClick={async () => {
+                  if (newTabNameForMove.trim()) {
+                    const newTab = await createTab(newTabNameForMove.trim())
+                    if (newTab) {
+                      await setWidgetTab(movingWidgetId, newTab.id)
+                      setNewTabNameForMove('')
+                      setMovingWidgetId(null)
+                      setActiveCustomTab(newTab.id)
+                    }
+                  }
+                }}
+                className="px-3 py-2 bg-blue-500 text-white text-sm font-semibold rounded-xl"
+              >
+                생성
+              </button>
             </div>
           </div>
         </div>

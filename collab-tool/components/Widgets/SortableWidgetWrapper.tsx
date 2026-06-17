@@ -3,13 +3,15 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ReactNode } from 'react'
+import { FolderOutput } from 'lucide-react'
 
 interface SortableWidgetWrapperProps {
   id: string
   children: ReactNode
+  onMoveWidget?: () => void
 }
 
-export function SortableWidgetWrapper({ id, children }: SortableWidgetWrapperProps) {
+export function SortableWidgetWrapper({ id, children, onMoveWidget }: SortableWidgetWrapperProps) {
   const {
     attributes,
     listeners,
@@ -31,10 +33,21 @@ export function SortableWidgetWrapper({ id, children }: SortableWidgetWrapperPro
     <div
       ref={setNodeRef}
       style={style}
-      className={`relative rounded-2xl transition-all duration-200 ${
+      className={`relative rounded-2xl transition-all duration-200 group ${
         isDragging ? 'opacity-90 scale-[1.02] shadow-xl ring-2 ring-blue-400' : 'opacity-100'
       }`}
     >
+      {/* 탭 이동 버튼 (마우스 오버 시 표시) */}
+      {onMoveWidget && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onMoveWidget() }}
+          className="absolute top-2 left-2 z-20 p-1.5 bg-white/70 backdrop-blur-md rounded-lg text-gray-500 hover:text-blue-600 hover:bg-white shadow-sm border border-gray-100 transition-all md:opacity-0 group-hover:opacity-100 touch-manipulation"
+          title="다른 탭으로 이동"
+        >
+          <FolderOutput size={14} />
+        </button>
+      )}
+
       {/* 상단 중앙 드래그 핸들 (위젯 카드 위에 오버레이) */}
       <div
         ref={setActivatorNodeRef}
@@ -51,3 +64,4 @@ export function SortableWidgetWrapper({ id, children }: SortableWidgetWrapperPro
     </div>
   )
 }
+
