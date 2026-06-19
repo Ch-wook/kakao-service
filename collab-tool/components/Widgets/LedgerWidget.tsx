@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useRef } from 'react'
 import {
-  BookOpen, Plus, Trash2, Download, Settings2, X, Edit2, ChevronDown, ChevronUp, Upload
+  BookOpen, Plus, Trash2, Download, Settings2, X, Edit2, ChevronDown, ChevronUp, Upload, FileText
 } from 'lucide-react'
 import XLSX from 'xlsx-js-style'
 import type {
@@ -74,6 +74,10 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
     fiscalYear: data.fiscalYear,
     openingBalance: String(data.openingBalance),
   })
+
+  const [showPasteModal, setShowPasteModal] = useState(false)
+  const [pasteText, setPasteText] = useState('')
+  const [pasteLoading, setPasteLoading] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -583,6 +587,13 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
         }
 
         if (newEntries.length > 0) {
+          // 암호화 문서(보안문서) 감지 방어 로직
+          const sampleText = JSON.stringify(newEntries).replace(/\s+/g, '')
+          if (newEntries.length <= 3 && (sampleText.includes('보안') || sampleText.includes('비밀번호') || sampleText.includes('암호') || sampleText.includes('보호'))) {
+            alert('비밀번호가 설정되어 있거나 특수 보안이 적용된 은행 문서입니다.\n암호를 해제하고 다시 시도하거나, [텍스트] 붙여넣기 기능을 이용해주세요.')
+            return
+          }
+
           const updatedEntries = [...data.entries, ...newEntries]
           await update({ ...data, entries: updatedEntries })
           alert(`${newEntries.length}건의 거래 내역이 성공적으로 장부에 추가되었습니다.`)
@@ -598,6 +609,84 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
       }
     }
     reader.readAsArrayBuffer(file)
+  }
+
+  // ── 스마트 텍스트 붙여넣기 ───────────────────────────────
+  const handlePasteSubmit = async () => {
+    if (!pasteText.trim()) return
+    setPasteLoading(true)
+
+    try {
+      const lines = pasteText.split('\n').filter(l => l.trim().length > 0)
+      const newEntries: LedgerEntry[] = []
+      
+      const dateRegex = /(20\d{2}[-./년]\s*\d{1,2}[-./월]\s*\d{1,2}[일]?)|(\d{1,2}[-./월]\s*\d{1,2}[일]?)/g
+      const amtRegex = /([0-9,]+)\s*(원|KRW|달러)/
+      const amtFallbackRegex = /([0-9]{1,3}(,[0-9]{3})+|[0-9]{4,})/g
+      
+      const todayDate = new Date()
+
+      for (const line of lines) {
+        let type: LedgerEntryType = 'expense' // 기본 지출
+        if (line.includes('입금') || line.includes('수입') || line.includes('취소') || line.includes('캐시백')) type = 'income'
+        if (line.includes('출금') || line.includes('지출') || line.includes('사용') || line.includes('결제')) type = 'expense'
+
+        // 1. 날짜 추출
+        let parsedDate = todayDate.toISOString().split('T')[0]
+        const dateMatch = line.match(dateRegex)
+        if (dateMatch) {
+          const dStr = dateMatch[0].replace(/[^0-9]/g, ' ')
+          const parts = dStr.trim().split(/\s+/).map(Number)
+          if (parts.length === 3) {
+            parsedDate = `${parts[0]}-${String(parts[1]).padStart(2, '0')}-${String(parts[2]).padStart(2, '0')}`
+          } else if (parts.length === 2) {
+            parsedDate = `${todayDate.getFullYear()}-${String(parts[0]).padStart(2, '0')}-${String(parts[1]).padStart(2, '0')}`
+          }
+        }
+
+        // 2. 금액 추출
+        let amount = 0
+        const amtMatch = line.match(amtRegex)
+        if (amtMatch) {
+          amount = parseInt(amtMatch[1].replace(/,/g, ''), 10)
+        } else {
+          const fbMatch = line.match(amtFallbackRegex)
+          if (fbMatch) {
+             const nums = fbMatch.map(n => parseInt(n.replace(/,/g, ''), 10))
+             amount = Math.max(...nums)
+          }
+        }
+
+        if (amount > 0) {
+          newEntries.push({
+            id: generateId(),
+            date: parsedDate,
+            type,
+            category: '기타',
+            description: line.substring(0, 40),
+            amount,
+            paymentMethod: '계좌이체',
+            voucherType: '없음',
+            memo: '스마트 입력됨',
+            created_at: getCurrentTimestamp(),
+          })
+        }
+      }
+
+      if (newEntries.length > 0) {
+        const updatedEntries = [...data.entries, ...newEntries]
+        const ok = await update({ ...data, entries: updatedEntries })
+        if (ok) {
+           setShowPasteModal(false)
+           setPasteText('')
+           alert(`${newEntries.length}건이 성공적으로 입력되었습니다.`)
+        }
+      } else {
+        alert('텍스트에서 금액을 찾을 수 없습니다. (예: 15,000원)')
+      }
+    } finally {
+      setPasteLoading(false)
+    }
   }
 
   // ── 렌더링 ────────────────────────────────────────────────
@@ -617,6 +706,14 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
             </span>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowPasteModal(true)}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 active:bg-blue-100 rounded-lg transition-colors"
+              title="텍스트 알림 붙여넣기로 입력"
+            >
+              <FileText size={13} />
+              텍스트
+            </button>
             <input
               type="file"
               accept=".xlsx, .xls, .csv"
@@ -1022,6 +1119,40 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
             >
               확인
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 스마트 텍스트 붙여넣기 모달 ─────────────────── */}
+      {showPasteModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
+              <h2 className="text-base font-bold text-gray-900">텍스트 붙여넣기</h2>
+              <button onClick={() => { setShowPasteModal(false); setPasteText(''); }} className="p-2 text-gray-400 active:bg-gray-100 rounded-xl">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-xs text-gray-500 leading-relaxed">
+                카카오페이, 토스, 은행 결제/입금 알림 텍스트를 복사해서 아래에 붙여넣으세요. 여러 개를 한 번에 넣어도 모두 분석해 줍니다.
+              </p>
+              <textarea
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder="예: 03/16 홍길동 송금 50,000원&#13;&#10;예: 2024-03-15 스타벅스 15,000 출금"
+                className="w-full h-36 px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+              />
+            </div>
+            <div className="px-5 pb-5">
+              <button
+                onClick={handlePasteSubmit}
+                disabled={pasteLoading || !pasteText.trim()}
+                className="w-full py-3.5 bg-blue-500 text-white rounded-2xl font-bold text-sm active:bg-blue-600 disabled:opacity-50 transition-colors"
+              >
+                {pasteLoading ? '분석 중...' : '자동 분석해서 추가하기'}
+              </button>
+            </div>
           </div>
         </div>
       )}
