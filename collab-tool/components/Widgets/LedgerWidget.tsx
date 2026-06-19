@@ -677,59 +677,82 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
     setPasteLoading(true)
 
     try {
-      const lines = pasteText.split('\n').filter(l => l.trim().length > 0)
+      const lines = pasteText.split('\n').map(l => l.trim()).filter(l => l.length > 0)
       const newEntries: LedgerEntry[] = []
       
-      const dateRegex = /(20\d{2}[-./년]\s*\d{1,2}[-./월]\s*\d{1,2}[일]?)|(\d{1,2}[-./월]\s*\d{1,2}[일]?)/g
-      const amtRegex = /([0-9,]+)\s*(원|KRW|달러)/
-      const amtFallbackRegex = /([0-9]{1,3}(,[0-9]{3})+|[0-9]{4,})/g
+      // 날짜 포맷 매칭 정규식 (2024-03-15, 03/15, 3월 15일 등)
+      const dateRegex = /(20\d{2}[-./년]\s*\d{1,2}[-./월]\s*\d{1,2}[일]?)|(\d{1,2}[-./월]\s*\d{1,2}[일]?)/
+      // 금액 포맷 매칭 정규식 (숫자 뒤에 원, KRW, 달러가 붙은 경우만 인정)
+      const amtRegex = /([0-9]{1,3}(,[0-9]{3})+|[0-9]+)\s*(원|KRW|달러)/
       
       const todayDate = new Date()
+      let currentDate = todayDate.toISOString().split('T')[0]
+      let lastTextLine = ''
 
-      for (const line of lines) {
-        let type: LedgerEntryType = 'expense' // 기본 지출
-        if (line.includes('입금') || line.includes('수입') || line.includes('취소') || line.includes('캐시백')) type = 'income'
-        if (line.includes('출금') || line.includes('지출') || line.includes('사용') || line.includes('결제')) type = 'expense'
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
 
-        // 1. 날짜 추출
-        let parsedDate = todayDate.toISOString().split('T')[0]
+        // 잔액, 조회기간, 계좌번호 등 불필요한 줄은 무조건 무시 (lastTextLine에도 안 넣음)
+        if (line.includes('잔액') || line.includes('조회') || line.includes('계좌') || line.includes('합계')) {
+          continue
+        }
+
+        // 1. 날짜 확인 (이 줄에 날짜가 있으면, 이후 거래들은 이 날짜를 따름)
         const dateMatch = line.match(dateRegex)
+        let foundDateInLine = false
         if (dateMatch) {
           const dStr = dateMatch[0].replace(/[^0-9]/g, ' ')
           const parts = dStr.trim().split(/\s+/).map(Number)
           if (parts.length === 3) {
-            parsedDate = `${parts[0]}-${String(parts[1]).padStart(2, '0')}-${String(parts[2]).padStart(2, '0')}`
+            currentDate = `${parts[0]}-${String(parts[1]).padStart(2, '0')}-${String(parts[2]).padStart(2, '0')}`
           } else if (parts.length === 2) {
-            parsedDate = `${todayDate.getFullYear()}-${String(parts[0]).padStart(2, '0')}-${String(parts[1]).padStart(2, '0')}`
+            currentDate = `${todayDate.getFullYear()}-${String(parts[0]).padStart(2, '0')}-${String(parts[1]).padStart(2, '0')}`
           }
+          foundDateInLine = true
         }
 
-        // 2. 금액 추출
-        let amount = 0
+        // 2. 금액 추출 ('원' 등 화폐단위가 있는 경우만 인정)
         const amtMatch = line.match(amtRegex)
         if (amtMatch) {
-          amount = parseInt(amtMatch[1].replace(/,/g, ''), 10)
-        } else {
-          const fbMatch = line.match(amtFallbackRegex)
-          if (fbMatch) {
-             const nums = fbMatch.map(n => parseInt(n.replace(/,/g, ''), 10))
-             amount = Math.max(...nums)
+          const amount = parseInt(amtMatch[1].replace(/,/g, ''), 10)
+          
+          if (amount > 0) {
+            let type: LedgerEntryType = 'expense' // 기본 지출
+            // 현재 줄이나 이전 줄(상호명)에 입금 관련 키워드가 있으면 수입으로 분류
+            if (line.includes('입금') || line.includes('수입') || line.includes('캐시백') || line.includes('환불')) type = 'income'
+            else if (lastTextLine.includes('입금') || lastTextLine.includes('수입') || lastTextLine.includes('환불')) type = 'income'
+
+            // 적요(Description) 만들기: 현재 줄에서 금액 부분을 지운 글자.
+            let desc = line.replace(amtMatch[0], '').trim()
+            // 지웠더니 글자가 너무 짧으면(예: '출금'만 남은 경우), 윗줄(상호명) 글자를 합쳐줌.
+            if (desc.length < 3 && lastTextLine) {
+              desc = lastTextLine + ' ' + desc
+            }
+            if (!desc.trim()) desc = '내역 없음'
+
+            newEntries.push({
+              id: generateId(),
+              date: currentDate,
+              type,
+              category: '기타',
+              description: desc.substring(0, 40).trim(),
+              amount,
+              paymentMethod: '계좌이체',
+              voucherType: '없음',
+              memo: '스마트 입력됨',
+              created_at: getCurrentTimestamp(),
+            })
+            
+            // 하나의 거래가 끝났으므로 이전 줄 텍스트 초기화
+            lastTextLine = ''
+            continue
           }
         }
 
-        if (amount > 0) {
-          newEntries.push({
-            id: generateId(),
-            date: parsedDate,
-            type,
-            category: '기타',
-            description: line.substring(0, 40),
-            amount,
-            paymentMethod: '계좌이체',
-            voucherType: '없음',
-            memo: '스마트 입력됨',
-            created_at: getCurrentTimestamp(),
-          })
+        // 날짜도 아니고 금액도 아니면서, 무시할 단어도 아닌 줄은 '적요 후보(상호명 등)'로 저장
+        if (!foundDateInLine && !amtMatch) {
+           // 이전 줄과 누적하지 않고 덮어씀 (보통 금액 바로 윗줄이 상호명임)
+           lastTextLine = line
         }
       }
 
@@ -739,10 +762,10 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
         if (ok) {
            setShowPasteModal(false)
            setPasteText('')
-           alert(`${newEntries.length}건이 성공적으로 입력되었습니다.`)
+           alert(`${newEntries.length}건이 성공적으로 장부에 추가되었습니다.`)
         }
       } else {
-        alert('텍스트에서 금액을 찾을 수 없습니다. (예: 15,000원)')
+        alert('텍스트에서 금액을 찾을 수 없습니다. (예: 15,000원)\n계좌번호나 잔액은 등록되지 않습니다.')
       }
     } finally {
       setPasteLoading(false)
