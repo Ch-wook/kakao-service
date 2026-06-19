@@ -458,21 +458,79 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
     setTimeout(() => URL.revokeObjectURL(url), 30000)
   }
 
-  // ── 엑셀 가져오기 (업로드) ──────────────────────────────────
+  // ── 엑셀/CSV 가져오기 (업로드 - EUC-KR & HTML 지원) ─────────────────
   const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    const reader = new FileReader()
-    reader.onload = async (evt) => {
-      try {
-        const fileData = new Uint8Array(evt.target?.result as ArrayBuffer)
-        const workbook = XLSX.read(fileData, { type: 'array' })
-        const sheetName = workbook.SheetNames[0]
-        const worksheet = workbook.Sheets[sheetName]
-        // 배열 형식으로 파싱
-        const jsonData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, defval: '' })
+    // 1단계: 국내 은행 파일(EUC-KR 인코딩된 HTML/CSV) 파싱 시도
+    const textReader = new FileReader()
+    textReader.onload = async (textEvt) => {
+      let jsonData: any[][] = []
+      let parseSuccess = false
 
+      try {
+        const textData = textEvt.target?.result as string
+        
+        // HTML 테이블 엑셀인 경우
+        if (textData.toLowerCase().includes('<table') || textData.toLowerCase().includes('<html')) {
+          const parser = new DOMParser()
+          const doc = parser.parseFromString(textData, 'text/html')
+          const rows = doc.querySelectorAll('tr')
+          if (rows.length > 2) {
+            rows.forEach((tr) => {
+              const cells = Array.from(tr.querySelectorAll('td, th')).map(td => td.textContent?.trim() || '')
+              jsonData.push(cells)
+            })
+            parseSuccess = true
+          }
+        } 
+        // CSV인 경우
+        else if (textData.includes(',') && textData.split('\n').length > 2 && !file.name.endsWith('.xlsx')) {
+           const lines = textData.split(/\r?\n/)
+           lines.forEach(line => {
+             const cells = line.split(',').map(c => c.replace(/^"|"$/g, '').trim())
+             jsonData.push(cells)
+           })
+           parseSuccess = true
+        }
+
+        if (!parseSuccess) {
+          await fallbackToXLSX()
+          return
+        }
+
+        await processJsonData(jsonData)
+
+      } catch (err) {
+        console.error('EUC-KR 텍스트 파싱 오류:', err)
+        await fallbackToXLSX()
+      }
+    }
+
+    // 2단계: 텍스트 파싱 실패 시 일반 바이너리 엑셀(.xlsx) 파싱 시도
+    const fallbackToXLSX = async () => {
+      const bufferReader = new FileReader()
+      bufferReader.onload = async (bufEvt) => {
+        try {
+          const fileData = new Uint8Array(bufEvt.target?.result as ArrayBuffer)
+          const workbook = XLSX.read(fileData, { type: 'array' })
+          const sheetName = workbook.SheetNames[0]
+          const worksheet = workbook.Sheets[sheetName]
+          const jsonData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, defval: '' })
+          await processJsonData(jsonData)
+        } catch (err) {
+          console.error('XLSX 파싱 오류:', err)
+          alert('엑셀 파일을 읽을 수 없습니다. 지원되지 않는 포맷입니다.')
+          if (fileInputRef.current) fileInputRef.current.value = ''
+        }
+      }
+      bufferReader.readAsArrayBuffer(file)
+    }
+
+    // 3단계: 추출된 2차원 배열 데이터(jsonData)를 분석하여 장부 내역으로 변환
+    const processJsonData = async (jsonData: any[][]) => {
+      try {
         if (jsonData.length < 2) return
 
         // 휴리스틱: 헤더 행 찾기 (상위 20줄 이내 탐색)
@@ -602,13 +660,15 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
         }
 
       } catch (err) {
-        console.error(err)
-        alert('엑셀 파일을 읽는 중 오류가 발생했습니다.')
+        console.error('데이터 분석 오류:', err)
+        alert('엑셀 데이터를 분석하는 중 오류가 발생했습니다.')
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = ''
       }
     }
-    reader.readAsArrayBuffer(file)
+
+    // 시작: 파일을 EUC-KR 텍스트로 읽기 시도
+    textReader.readAsText(file, 'euc-kr')
   }
 
   // ── 스마트 텍스트 붙여넣기 ───────────────────────────────
