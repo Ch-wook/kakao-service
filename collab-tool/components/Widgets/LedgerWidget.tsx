@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef } from 'react'
 import {
-  BookOpen, Plus, Trash2, Download, Settings2, X, Edit2, ChevronDown, ChevronUp,
+  BookOpen, Plus, Trash2, Download, Settings2, X, Edit2, ChevronDown, ChevronUp, Upload
 } from 'lucide-react'
 import XLSX from 'xlsx-js-style'
 import type {
@@ -74,6 +74,8 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
     fiscalYear: data.fiscalYear,
     openingBalance: String(data.openingBalance),
   })
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const update = useCallback(
     (newData: LedgerData) => onUpdateData(widget.id, newData),
@@ -452,6 +454,152 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
     setTimeout(() => URL.revokeObjectURL(url), 30000)
   }
 
+  // ── 엑셀 가져오기 (업로드) ──────────────────────────────────
+  const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = async (evt) => {
+      try {
+        const fileData = new Uint8Array(evt.target?.result as ArrayBuffer)
+        const workbook = XLSX.read(fileData, { type: 'array' })
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        // 배열 형식으로 파싱
+        const jsonData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, defval: '' })
+
+        if (jsonData.length < 2) return
+
+        // 휴리스틱: 헤더 행 찾기 (상위 20줄 이내 탐색)
+        let headerRowIndex = -1
+        let colMap = { date: -1, desc: -1, income: -1, expense: -1, amount: -1, type: -1 }
+
+        for (let i = 0; i < Math.min(20, jsonData.length); i++) {
+          const row = jsonData[i]
+          if (!Array.isArray(row)) continue
+          
+          let foundDate = -1, foundDesc = -1, foundIncome = -1, foundExpense = -1, foundAmount = -1, foundType = -1
+          
+          row.forEach((cell, idx) => {
+            if (typeof cell !== 'string') return
+            const text = cell.replace(/\s+/g, '').toLowerCase()
+            if (text.includes('날짜') || text.includes('일시') || text.includes('거래일')) foundDate = idx
+            if (text.includes('적요') || text.includes('내용') || text.includes('기재') || text.includes('거래명') || text.includes('가맹점')) foundDesc = idx
+            if (text === '입금' || text.includes('입금액') || text.includes('수입')) foundIncome = idx
+            if (text === '출금' || text.includes('출금액') || text.includes('지출')) foundExpense = idx
+            if (text === '금액' || text === '거래금액') foundAmount = idx
+            if (text === '구분' || text.includes('거래구분')) foundType = idx
+          })
+
+          if (foundDate !== -1 && (foundDesc !== -1 || foundAmount !== -1 || foundIncome !== -1 || foundExpense !== -1)) {
+            headerRowIndex = i
+            colMap = { date: foundDate, desc: foundDesc, income: foundIncome, expense: foundExpense, amount: foundAmount, type: foundType }
+            break
+          }
+        }
+
+        if (headerRowIndex === -1 || colMap.date === -1) {
+          alert('엑셀 파일에서 [날짜]나 [금액] 관련 열을 자동으로 찾을 수 없습니다. 양식을 확인해주세요.')
+          return
+        }
+
+        const newEntries: LedgerEntry[] = []
+
+        // 데이터 행 순회
+        for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
+          const row = jsonData[i]
+          if (!Array.isArray(row)) continue
+
+          const rawDate = row[colMap.date]
+          if (!rawDate) continue
+
+          let parsedDate = String(rawDate).trim()
+          // 엑셀 날짜 숫자 포맷 처리
+          if (typeof rawDate === 'number') {
+            const dateObj = new Date(Math.round((rawDate - 25569) * 86400 * 1000))
+            parsedDate = dateObj.toISOString().split('T')[0]
+          } else {
+             // YYYY-MM-DD 비스무리한 텍스트 추출 (YYYY.MM.DD, YYYY/MM/DD 등)
+             const match = parsedDate.match(/(\d{4})[./-](\d{1,2})[./-](\d{1,2})/)
+             if (match) {
+                const [_, y, m, d] = match
+                parsedDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+             } else if (parsedDate.length >= 8) {
+               // 대충 YYYY-MM-DD로 잘라봄 (숫자 8자리인 경우 등은 복잡하므로 일단 대시 변환 시도)
+               parsedDate = parsedDate.substring(0, 10).replace(/\./g, '-')
+             }
+          }
+          if (parsedDate.length !== 10) continue // 10자리가 아니면 파싱 실패로 간주
+
+          let desc = colMap.desc !== -1 ? String(row[colMap.desc]) : '내역 없음'
+          
+          let amount = 0
+          let type: LedgerEntryType = 'expense'
+
+          if (colMap.income !== -1 || colMap.expense !== -1) {
+            const inAmt = parseInt(String(row[colMap.income] || '0').replace(/[^0-9]/g, ''), 10) || 0
+            const outAmt = parseInt(String(row[colMap.expense] || '0').replace(/[^0-9]/g, ''), 10) || 0
+            
+            if (inAmt > 0) {
+              amount = inAmt
+              type = 'income'
+            } else if (outAmt > 0) {
+              amount = outAmt
+              type = 'expense'
+            } else {
+              continue // 둘 다 0이면 무시
+            }
+          } else if (colMap.amount !== -1) {
+             const amtStr = String(row[colMap.amount]).replace(/,/g, '').trim()
+             amount = Math.abs(parseInt(amtStr.replace(/[^0-9-]/g, ''), 10) || 0)
+             if (amount === 0) continue
+
+             if (amtStr.startsWith('-')) {
+               type = 'expense'
+             } else if (colMap.type !== -1) {
+                const typeStr = String(row[colMap.type])
+                if (typeStr.includes('입금') || typeStr.includes('수입')) type = 'income'
+                else type = 'expense'
+             } else {
+               type = 'expense' // 기본 지출 처리
+             }
+          } else {
+            continue
+          }
+
+          newEntries.push({
+            id: generateId(),
+            date: parsedDate,
+            type,
+            category: '기타', // 일괄 '기타' 처리
+            description: desc,
+            amount,
+            paymentMethod: '계좌이체',
+            voucherType: '없음',
+            memo: '',
+            created_at: getCurrentTimestamp(),
+          })
+        }
+
+        if (newEntries.length > 0) {
+          const updatedEntries = [...data.entries, ...newEntries]
+          await update({ ...data, entries: updatedEntries })
+          alert(`${newEntries.length}건의 거래 내역이 성공적으로 장부에 추가되었습니다.`)
+        } else {
+          alert('가져올 유효한 거래 내역이 없습니다.')
+        }
+
+      } catch (err) {
+        console.error(err)
+        alert('엑셀 파일을 읽는 중 오류가 발생했습니다.')
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = ''
+      }
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
   // ── 렌더링 ────────────────────────────────────────────────
   return (
     <>
@@ -469,6 +617,21 @@ export default function LedgerWidget({ widget, onUpdateData, onDeleteWidget }: L
             </span>
           </div>
           <div className="flex items-center gap-1">
+            <input
+              type="file"
+              accept=".xlsx, .xls, .csv"
+              className="hidden"
+              ref={fileInputRef}
+              onChange={handleImportExcel}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-100 rounded-lg transition-colors"
+              title="엑셀/CSV 내역 올리기"
+            >
+              <Upload size={13} />
+              업로드
+            </button>
             <button
               onClick={() => {
                 setSettingsForm({
